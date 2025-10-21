@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -11,7 +12,7 @@ import (
 )
 
 type Server struct {
-	DomainRepo *storage.DomainRepo
+	DomainRepo *storage.SQLiteDomainRepo
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {
@@ -29,20 +30,38 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 var domainRegex = regexp.MustCompile(`^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$`)
 
 func validateDomain(raw string) (string, error) {
-	name := strings.TrimSpace(strings.ToLower(raw))
-	if name == "" {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" {
 		return "", errors.New("domain name required")
 	}
 
-	if !domainRegex.MatchString(name) {
+	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
+		raw = "http://" + raw
+	}
+
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", errors.New("invalid url")
+	}
+
+	host := u.Hostname()
+	if host == "" {
 		return "", errors.New("invalid domain name")
 	}
 
-	return name, nil
+	if !domainRegex.MatchString(host) {
+		return "", errors.New("invalid domain name")
+	}
+
+	return host, nil
 }
 
 func (s *Server) GetDomains(w http.ResponseWriter, _ *http.Request) {
-	domains := s.DomainRepo.GetAll()
+	domains, err := s.DomainRepo.GetAll()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get domains")
+		return
+	}
 	writeJSON(w, http.StatusOK, domains)
 }
 
@@ -62,15 +81,23 @@ func (s *Server) CreateDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	domain := s.DomainRepo.Add(name)
+	domain, err := s.DomainRepo.Add(name)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to add domain")
+		return
+	}
 	writeJSON(w, http.StatusCreated, domain)
 }
 
 func (s *Server) DeleteDomainByID(w http.ResponseWriter, _ *http.Request, id int) {
-	deleted, ok := s.DomainRepo.DeleteByID(id)
+	ok, err := s.DomainRepo.DeleteByID(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to delete domain")
+		return
+	}
 	if !ok {
 		writeError(w, http.StatusNotFound, "domain not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, deleted)
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": id})
 }

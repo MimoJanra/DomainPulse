@@ -15,6 +15,7 @@
 /vendor/
 
 # ─── SQLite databases and migrations ────────────────
+*.sqlite
 *.db
 *.db-shm
 *.db-wal

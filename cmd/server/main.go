@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,7 +11,18 @@ import (
 )
 
 func main() {
-	repo := storage.NewDomainRepo()
+	db, err := storage.InitDB()
+	if err != nil {
+		log.Fatalf("failed to init db: %v", err)
+	}
+	defer func(db *sql.DB) {
+		err := db.Close()
+		if err != nil {
+			log.Fatalf("failed to close db: %v", err)
+		}
+	}(db)
+
+	repo := storage.NewSQLiteDomainRepo(db)
 	server := &api.Server{DomainRepo: repo}
 
 	r := api.SetupRouter(server)

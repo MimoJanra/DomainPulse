@@ -21,6 +21,16 @@ func InitDB() (*sql.DB, error) {
 		return nil, fmt.Errorf("error ping db: %w", err)
 	}
 
-	fmt.Println("✅ db connected")
+	_, err = db.Exec(`
+        CREATE TABLE IF NOT EXISTS domains (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL
+        );
+    `)
+	if err != nil {
+		return nil, fmt.Errorf("error creating table: %w", err)
+	}
+
+	fmt.Println("db connected")
 	return db, nil
 }
