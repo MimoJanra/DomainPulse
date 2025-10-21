@@ -3,6 +3,7 @@ package storage
 import (
 	"DomainPulse/internal/models"
 	"database/sql"
+	"fmt"
 )
 
 type SQLiteDomainRepo struct {
@@ -18,7 +19,12 @@ func (r *SQLiteDomainRepo) GetAll() ([]models.Domain, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			fmt.Printf(err.Error())
+		}
+	}(rows)
 
 	var domains []models.Domain
 	for rows.Next() {
