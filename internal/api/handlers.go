@@ -2,31 +2,58 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
+
+	"DomainPulse/internal/storage"
 )
 
-func DomainsHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
+type Server struct {
+	DomainRepo *storage.DomainRepo
+}
 
-		if err := json.NewEncoder(w).Encode([]string{}); err != nil {
-			http.Error(w, "failed to encode JSON", http.StatusInternalServerError)
-			return
-		}
+func (s *Server) GetDomains(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 
-	case http.MethodPost:
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusCreated)
+	domains := s.DomainRepo.GetAll()
+	if err := json.NewEncoder(w).Encode(domains); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	}
+}
 
-		if _, err := fmt.Fprintln(w, "created"); err != nil {
-			http.Error(w, "failed to write response", http.StatusInternalServerError)
-			return
-		}
+func (s *Server) CreateDomain(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name string `json:"name"`
+	}
 
-	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if body.Name == "" {
+		http.Error(w, "domain name required", http.StatusBadRequest)
+		return
+	}
+
+	domain := s.DomainRepo.Add(body.Name)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(domain); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) DeleteDomainByID(w http.ResponseWriter, _ *http.Request, id int) {
+	deleted, ok := s.DomainRepo.DeleteByID(id)
+	if !ok {
+		http.Error(w, "domain not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(deleted); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }

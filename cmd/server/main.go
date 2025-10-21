@@ -10,20 +10,13 @@ import (
 )
 
 func main() {
-	db, err := storage.InitDB()
-	if err != nil {
-		log.Fatalf("error init db: %v", err)
-	}
-	defer func() {
-		if err := db.Close(); err != nil {
-			log.Printf("error closing db: %v", err)
-		}
-	}()
+	repo := storage.NewDomainRepo()
+	server := &api.Server{DomainRepo: repo}
 
-	r := api.SetupRouter()
+	r := api.SetupRouter(server)
 
 	fmt.Println("Server started on :8080")
 	if err := http.ListenAndServe(":8080", r); err != nil {
-		log.Fatalf("server error: %v", err)
+		log.Fatal(err)
 	}
 }
