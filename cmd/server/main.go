@@ -16,14 +16,20 @@ func main() {
 		log.Fatalf("failed to init db: %v", err)
 	}
 	defer func(db *sql.DB) {
-		err := db.Close()
-		if err != nil {
-			log.Fatalf("failed to close db: %v", err)
+		if err := db.Close(); err != nil {
+			log.Printf("failed to close db: %v", err)
 		}
 	}(db)
 
-	repo := storage.NewSQLiteDomainRepo(db)
-	server := &api.Server{DomainRepo: repo}
+	domainRepo := storage.NewSQLiteDomainRepo(db)
+	checkRepo := storage.NewCheckRepo(db)
+	resultRepo := storage.NewResultRepo(db)
+
+	server := &api.Server{
+		DomainRepo: domainRepo,
+		CheckRepo:  checkRepo,
+		ResultRepo: resultRepo,
+	}
 
 	r := api.SetupRouter(server)
 
