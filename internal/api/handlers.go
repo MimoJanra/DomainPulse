@@ -1,9 +1,6 @@
 package api
 
 import (
-	"DomainPulse/internal/checker"
-	"DomainPulse/internal/models"
-	"DomainPulse/internal/storage"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +10,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/MimoJanra/DomainPulse/internal/checker"
+	"github.com/MimoJanra/DomainPulse/internal/models"
+	"github.com/MimoJanra/DomainPulse/internal/storage"
 
 	"github.com/go-chi/chi/v5"
 )

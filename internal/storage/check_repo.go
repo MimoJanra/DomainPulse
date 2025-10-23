@@ -1,8 +1,9 @@
 package storage
 
 import (
-	"DomainPulse/internal/models"
 	"database/sql"
+
+	"github.com/MimoJanra/DomainPulse/internal/models"
 )
 
 type CheckRepo struct {
