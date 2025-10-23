@@ -6,12 +6,15 @@ import (
 	"DomainPulse/internal/storage"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type Server struct {
@@ -50,11 +53,7 @@ func validateDomain(raw string) (string, error) {
 	}
 
 	host := u.Hostname()
-	if host == "" {
-		return "", errors.New("invalid domain name")
-	}
-
-	if !domainRegex.MatchString(host) {
+	if host == "" || !domainRegex.MatchString(host) {
 		return "", errors.New("invalid domain name")
 	}
 
@@ -108,13 +107,9 @@ func (s *Server) DeleteDomainByID(w http.ResponseWriter, _ *http.Request, id int
 }
 
 func (s *Server) GetCheck(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 3 {
-		writeError(w, http.StatusBadRequest, "invalid path")
-		return
-	}
-	domainID, err := strconv.Atoi(parts[2])
-	if err != nil {
+	domainIDStr := chi.URLParam(r, "id")
+	domainID, err := strconv.Atoi(domainIDStr)
+	if err != nil || domainID <= 0 {
 		writeError(w, http.StatusBadRequest, "invalid domain id")
 		return
 	}
@@ -128,13 +123,9 @@ func (s *Server) GetCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) CreateCheck(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 3 {
-		writeError(w, http.StatusBadRequest, "invalid path")
-		return
-	}
-	domainID, err := strconv.Atoi(parts[2])
-	if err != nil {
+	domainIDStr := chi.URLParam(r, "id")
+	domainID, err := strconv.Atoi(domainIDStr)
+	if err != nil || domainID <= 0 {
 		writeError(w, http.StatusBadRequest, "invalid domain id")
 		return
 	}
@@ -142,7 +133,7 @@ func (s *Server) CreateCheck(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Type      string `json:"type"`
 		Frequency string `json:"frequency"`
-		URL       string `json:"url"`
+		Path      string `json:"path"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -150,12 +141,12 @@ func (s *Server) CreateCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if body.Type == "" || body.Frequency == "" || body.URL == "" {
+	if body.Type == "" || body.Frequency == "" || body.Path == "" {
 		writeError(w, http.StatusBadRequest, "missing required fields")
 		return
 	}
 
-	check, err := s.CheckRepo.Add(domainID, body.Type, body.Frequency, body.URL)
+	check, err := s.CheckRepo.Add(domainID, body.Type, body.Frequency, body.Path)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to add check")
 		return
@@ -174,7 +165,19 @@ func (s *Server) RunChecks(w http.ResponseWriter, _ *http.Request) {
 	results := make([]models.Result, 0, len(checks))
 
 	for _, check := range checks {
-		resData := checker.RunHTTPCheck(check.URL, 10*time.Second)
+		domain, err := s.DomainRepo.GetByID(check.DomainID)
+		if err != nil {
+			fmt.Printf("domain not found for check %d\n", check.ID)
+			continue
+		}
+
+		fullURL := "https://" + domain.Name
+		if !strings.HasPrefix(check.Path, "/") {
+			fullURL += "/"
+		}
+		fullURL += check.Path
+
+		resData := checker.RunHTTPCheck(fullURL, 10*time.Second)
 
 		res := models.Result{
 			CheckID:    check.ID,
@@ -185,8 +188,8 @@ func (s *Server) RunChecks(w http.ResponseWriter, _ *http.Request) {
 		}
 
 		if err := s.ResultRepo.Add(res); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to save result")
-			return
+			fmt.Printf("failed to save result for check %d: %v\n", check.ID, err)
+			continue
 		}
 
 		results = append(results, res)

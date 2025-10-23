@@ -3,7 +3,6 @@ package storage
 import (
 	"DomainPulse/internal/models"
 	"database/sql"
-	"fmt"
 )
 
 type SQLiteDomainRepo struct {
@@ -19,12 +18,7 @@ func (r *SQLiteDomainRepo) GetAll() ([]models.Domain, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func(rows *sql.Rows) {
-		err := rows.Close()
-		if err != nil {
-			fmt.Printf(err.Error())
-		}
-	}(rows)
+	defer rows.Close()
 
 	var domains []models.Domain
 	for rows.Next() {
@@ -37,17 +31,19 @@ func (r *SQLiteDomainRepo) GetAll() ([]models.Domain, error) {
 	return domains, nil
 }
 
+func (r *SQLiteDomainRepo) GetByID(id int) (models.Domain, error) {
+	row := r.db.QueryRow("SELECT id, name FROM domains WHERE id = ?", id)
+	var d models.Domain
+	err := row.Scan(&d.ID, &d.Name)
+	return d, err
+}
+
 func (r *SQLiteDomainRepo) Add(name string) (models.Domain, error) {
 	res, err := r.db.Exec("INSERT INTO domains (name) VALUES (?)", name)
 	if err != nil {
 		return models.Domain{}, err
 	}
-
-	id, err := res.LastInsertId()
-	if err != nil {
-		return models.Domain{}, err
-	}
-
+	id, _ := res.LastInsertId()
 	return models.Domain{ID: int(id), Name: name}, nil
 }
 
@@ -56,11 +52,6 @@ func (r *SQLiteDomainRepo) DeleteByID(id int) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-
+	rows, _ := res.RowsAffected()
 	return rows > 0, nil
 }
