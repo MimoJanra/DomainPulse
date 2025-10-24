@@ -3,38 +3,39 @@ package api
 import (
 	"net/http"
 	"strconv"
-	"strings"
+
+	"github.com/go-chi/chi/v5"
 )
 
-func SetupRouter(s *Server) *http.ServeMux {
-	mux := http.NewServeMux()
+func SetupRouter(s *Server) http.Handler {
+	r := chi.NewRouter()
 
-	mux.HandleFunc("/domains", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			s.GetDomains(w, r)
-		case http.MethodPost:
-			s.CreateDomain(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
+	r.Route("/domains", func(r chi.Router) {
+		r.Get("/", s.GetDomains)
+		r.Post("/", s.CreateDomain)
+
+		r.Route("/{id}", func(r chi.Router) {
+			r.Delete("/", func(w http.ResponseWriter, r *http.Request) {
+				id, err := strconv.Atoi(chi.URLParam(r, "id"))
+				if err != nil || id <= 0 {
+					http.Error(w, "invalid domain id", http.StatusBadRequest)
+					return
+				}
+				s.DeleteDomainByID(w, r, id)
+			})
+
+			r.Route("/checks", func(r chi.Router) {
+				r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+					s.GetCheck(w, r)
+				})
+				r.Post("/", func(w http.ResponseWriter, r *http.Request) {
+					s.CreateCheck(w, r)
+				})
+			})
+		})
 	})
 
-	mux.HandleFunc("/domains/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+	r.Post("/run-check", s.RunChecks)
 
-		idStr := strings.TrimPrefix(r.URL.Path, "/domains/")
-		id, err := strconv.Atoi(idStr)
-		if err != nil || id <= 0 {
-			http.Error(w, "invalid domain id", http.StatusBadRequest)
-			return
-		}
-
-		s.DeleteDomainByID(w, r, id)
-	})
-
-	return mux
+	return r
 }
