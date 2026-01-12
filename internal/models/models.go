@@ -70,6 +70,10 @@ type TimeIntervalData struct {
 }
 
 type TimeIntervalResponse struct {
-	Interval string             `json:"interval" example:"1m"`
-	Data     []TimeIntervalData `json:"data"`
+	Interval   string             `json:"interval" example:"1m"`
+	Data       []TimeIntervalData `json:"data"`
+	Total      int                `json:"total,omitempty"`
+	Page       int                `json:"page,omitempty"`
+	PageSize   int                `json:"page_size,omitempty"`
+	TotalPages int                `json:"total_pages,omitempty"`
 }

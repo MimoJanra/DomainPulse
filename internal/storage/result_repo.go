@@ -104,11 +104,11 @@ func (r *ResultRepo) GetByCheckIDWithPagination(checkID int, from, to *time.Time
 	args := []any{checkID}
 
 	if from != nil {
-		query += " AND created_at >= ?"
+		query += " AND datetime(created_at) >= datetime(?)"
 		args = append(args, from.Format(time.RFC3339))
 	}
 	if to != nil {
-		query += " AND created_at <= ?"
+		query += " AND datetime(created_at) <= datetime(?)"
 		args = append(args, to.Format(time.RFC3339))
 	}
 
@@ -133,11 +133,11 @@ func (r *ResultRepo) GetByCheckIDWithPagination(checkID int, from, to *time.Time
 	countQuery := "SELECT COUNT(*) FROM results WHERE check_id = ?"
 	countArgs := []any{checkID}
 	if from != nil {
-		countQuery += " AND created_at >= ?"
+		countQuery += " AND datetime(created_at) >= datetime(?)"
 		countArgs = append(countArgs, from.Format(time.RFC3339))
 	}
 	if to != nil {
-		countQuery += " AND created_at <= ?"
+		countQuery += " AND datetime(created_at) <= datetime(?)"
 		countArgs = append(countArgs, to.Format(time.RFC3339))
 	}
 
@@ -145,6 +145,10 @@ func (r *ResultRepo) GetByCheckIDWithPagination(checkID int, from, to *time.Time
 	err = r.db.QueryRow(countQuery, countArgs...).Scan(&total)
 	if err != nil {
 		return nil, 0, err
+	}
+
+	if results == nil {
+		results = []models.Result{}
 	}
 
 	return results, total, rows.Err()
@@ -164,11 +168,11 @@ func (r *ResultRepo) GetStats(checkID int, from, to *time.Time) (Stats, error) {
 	args := []any{checkID}
 
 	if from != nil {
-		query += " AND created_at >= ?"
+		query += " AND datetime(created_at) >= datetime(?)"
 		args = append(args, from.Format(time.RFC3339))
 	}
 	if to != nil {
-		query += " AND created_at <= ?"
+		query += " AND datetime(created_at) <= datetime(?)"
 		args = append(args, to.Format(time.RFC3339))
 	}
 
@@ -258,7 +262,18 @@ func calculateLatencyStats(durations []int) models.LatencyStats {
 	}
 }
 
-func (r *ResultRepo) GetByTimeInterval(checkID int, interval string, from, to *time.Time) ([]models.TimeIntervalData, error) {
+func (r *ResultRepo) GetByTimeInterval(checkID int, interval string, from, to *time.Time, page, pageSize int) ([]models.TimeIntervalData, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 100
+	}
+	if pageSize > 1000 {
+		pageSize = 1000
+	}
+
+	offset := (page - 1) * pageSize
 	var timeTruncate string
 
 	switch interval {
@@ -269,7 +284,7 @@ func (r *ResultRepo) GetByTimeInterval(checkID int, interval string, from, to *t
 	case "1h":
 		timeTruncate = "strftime('%Y-%m-%d %H:00:00', created_at)"
 	default:
-		return nil, fmt.Errorf("unsupported interval: %s. Supported: 1m, 5m, 1h", interval)
+		return nil, 0, fmt.Errorf("unsupported interval: %s. Supported: 1m, 5m, 1h", interval)
 	}
 
 	query := fmt.Sprintf(`
@@ -288,19 +303,20 @@ func (r *ResultRepo) GetByTimeInterval(checkID int, interval string, from, to *t
 	args := []any{checkID}
 
 	if from != nil {
-		query += " AND created_at >= ?"
+		query += " AND datetime(created_at) >= datetime(?)"
 		args = append(args, from.Format(time.RFC3339))
 	}
 	if to != nil {
-		query += " AND created_at <= ?"
+		query += " AND datetime(created_at) <= datetime(?)"
 		args = append(args, to.Format(time.RFC3339))
 	}
 
-	query += " GROUP BY time_bucket ORDER BY time_bucket ASC"
+	query += " GROUP BY time_bucket ORDER BY time_bucket ASC LIMIT ? OFFSET ?"
+	args = append(args, pageSize, offset)
 
 	rows, err := r.db.Query(query, args...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -312,7 +328,7 @@ func (r *ResultRepo) GetByTimeInterval(checkID int, interval string, from, to *t
 		var avgLatency sql.NullFloat64
 
 		if err := rows.Scan(&timestamp, &data.Count, &successCount, &failureCount, &avgLatency, &data.MinLatency, &data.MaxLatency); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		data.Timestamp = timestamp
@@ -330,11 +346,11 @@ func (r *ResultRepo) GetByTimeInterval(checkID int, interval string, from, to *t
 		`, timeTruncate)
 		statusArgs := []any{checkID, timestamp}
 		if from != nil {
-			statusQuery += " AND created_at >= ?"
+			statusQuery += " AND datetime(created_at) >= datetime(?)"
 			statusArgs = append(statusArgs, from.Format(time.RFC3339))
 		}
 		if to != nil {
-			statusQuery += " AND created_at <= ?"
+			statusQuery += " AND datetime(created_at) <= datetime(?)"
 			statusArgs = append(statusArgs, to.Format(time.RFC3339))
 		}
 		statusQuery += " GROUP BY status"
@@ -354,5 +370,146 @@ func (r *ResultRepo) GetByTimeInterval(checkID int, interval string, from, to *t
 		results = append(results, data)
 	}
 
-	return results, rows.Err()
+	countQuery := fmt.Sprintf("SELECT COUNT(DISTINCT %s) FROM results WHERE check_id = ?", timeTruncate)
+	countArgs := []any{checkID}
+	if from != nil {
+		countQuery += " AND datetime(created_at) >= datetime(?)"
+		countArgs = append(countArgs, from.Format(time.RFC3339))
+	}
+	if to != nil {
+		countQuery += " AND datetime(created_at) <= datetime(?)"
+		countArgs = append(countArgs, to.Format(time.RFC3339))
+	}
+
+	var total int
+	err = r.db.QueryRow(countQuery, countArgs...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if results == nil {
+		results = []models.TimeIntervalData{}
+	}
+
+	return results, total, rows.Err()
+}
+
+func (r *ResultRepo) GetRecentDataForAllChecks(from, to *time.Time, page, pageSize int) ([]models.TimeIntervalData, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 50
+	}
+	if pageSize > 1000 {
+		pageSize = 1000
+	}
+
+	offset := (page - 1) * pageSize
+	timeTruncate := "strftime('%Y-%m-%d %H:%M:00', created_at)"
+
+	query := fmt.Sprintf(`
+		SELECT 
+			%s as time_bucket,
+			COUNT(*) as count,
+			SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count,
+			SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END) as failure_count,
+			AVG(duration_ms) as avg_latency,
+			MIN(duration_ms) as min_latency,
+			MAX(duration_ms) as max_latency
+		FROM results
+		WHERE 1=1
+	`, timeTruncate)
+
+	args := []any{}
+	if from != nil {
+		query += " AND datetime(created_at) >= datetime(?)"
+		args = append(args, from.Format(time.RFC3339))
+	}
+	if to != nil {
+		query += " AND datetime(created_at) <= datetime(?)"
+		args = append(args, to.Format(time.RFC3339))
+	}
+
+	query += " GROUP BY time_bucket ORDER BY time_bucket ASC LIMIT ? OFFSET ?"
+	args = append(args, pageSize, offset)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var results []models.TimeIntervalData
+	for rows.Next() {
+		var data models.TimeIntervalData
+		var timestamp string
+		var successCount, failureCount int
+		var avgLatency sql.NullFloat64
+
+		if err := rows.Scan(&timestamp, &data.Count, &successCount, &failureCount, &avgLatency, &data.MinLatency, &data.MaxLatency); err != nil {
+			return nil, 0, err
+		}
+
+		data.Timestamp = timestamp
+		data.SuccessCount = successCount
+		data.FailureCount = failureCount
+		if avgLatency.Valid {
+			data.AvgLatency = avgLatency.Float64
+		}
+		data.StatusDistribution = make(map[string]int)
+
+		statusQuery := fmt.Sprintf(`
+			SELECT status, COUNT(*) 
+			FROM results 
+			WHERE %s = ?
+		`, timeTruncate)
+		statusArgs := []any{timestamp}
+		if from != nil {
+			statusQuery += " AND datetime(created_at) >= datetime(?)"
+			statusArgs = append(statusArgs, from.Format(time.RFC3339))
+		}
+		if to != nil {
+			statusQuery += " AND datetime(created_at) <= datetime(?)"
+			statusArgs = append(statusArgs, to.Format(time.RFC3339))
+		}
+		statusQuery += " GROUP BY status"
+
+		statusRows, err := r.db.Query(statusQuery, statusArgs...)
+		if err == nil {
+			for statusRows.Next() {
+				var status string
+				var count int
+				if err := statusRows.Scan(&status, &count); err == nil {
+					data.StatusDistribution[status] = count
+				}
+			}
+			statusRows.Close()
+		}
+
+		results = append(results, data)
+	}
+
+	countQuery := "SELECT COUNT(DISTINCT " + timeTruncate + ") FROM results WHERE 1=1"
+	countArgs := []any{}
+	if from != nil {
+		countQuery += " AND datetime(created_at) >= datetime(?)"
+		countArgs = append(countArgs, from.Format(time.RFC3339))
+	}
+	if to != nil {
+		countQuery += " AND datetime(created_at) <= datetime(?)"
+		countArgs = append(countArgs, to.Format(time.RFC3339))
+	}
+
+	var total int
+	err = r.db.QueryRow(countQuery, countArgs...).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if results == nil {
+		results = []models.TimeIntervalData{}
+	}
+
+	return results, total, rows.Err()
 }

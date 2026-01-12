@@ -13,6 +13,14 @@ import (
 func SetupRouter(s *Server) http.Handler {
 	r := chi.NewRouter()
 
+	// Статические файлы для веб-интерфейса
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "web/index.html")
+	})
+	r.Get("/static/*", func(w http.ResponseWriter, r *http.Request) {
+		http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))).ServeHTTP(w, r)
+	})
+
 	r.Get("/swagger/*", httpSwagger.WrapHandler)
 
 	r.Get("/domains", s.GetDomains)
@@ -42,6 +50,7 @@ func SetupRouter(s *Server) http.Handler {
 	r.Get("/checks/{id}/intervals", func(w http.ResponseWriter, r *http.Request) {
 		s.GetCheckTimeIntervalData(w, r)
 	})
+	r.Get("/dashboard/recent", s.GetRecentDashboardData)
 
 	r.Get("/checks", s.GetChecks)
 	r.Post("/checks", s.CreateCheckDirect)

@@ -10,29 +10,65 @@
 *.dylib
 *.test
 *.out
+server
+server.exe
 
-# ─── Go modules cache (не нужно в репозитории) ──────
+# ─── Go modules cache ────────────────────────────────
 /vendor/
+go.work
+go.work.sum
 
 # ─── SQLite databases and migrations ────────────────
 *.sqlite
+*.sqlite3
 *.db
 *.db-shm
 *.db-wal
+database.db
+identifier.sqlite
 
 # ─── Logs and temp files ────────────────────────────
 *.log
 *.tmp
 *.swp
+*.swo
 *.bak
 *.old
+*~
 
-# ─── IDE/editor stuff ───────────────────────────────
+# ─── IDE/editor stuff ────────────────────────────────
 .vscode/
 .idea/
 *.iml
 .DS_Store
+Thumbs.db
+*.sublime-project
+*.sublime-workspace
 
-# ─── Environment/config files ───────────────────────
+# ─── Environment/config files ────────────────────────
 .env
+.env.local
+.env.*.local
 config.yaml
+config.yml
+*.local.yaml
+*.local.yml
+
+# ─── OS generated files ──────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+
+# ─── Coverage reports ────────────────────────────────
+*.cover
+*.coverprofile
+coverage.html
+coverage.out
+
+# ─── Debug files ─────────────────────────────────────
+debug
+__debug_bin

@@ -487,13 +487,15 @@ func (s *Server) GetCheckStats(w http.ResponseWriter, r *http.Request) {
 
 // GetCheckTimeIntervalData godoc
 // @Summary Получить агрегированные данные по тайм-интервалам
-// @Description Возвращает данные, агрегированные по тайм-интервалам (1m, 5m, 1h) для построения графиков
+// @Description Возвращает данные, агрегированные по тайм-интервалам (1m, 5m, 1h) для построения графиков с пагинацией
 // @Tags results
 // @Produce json
 // @Param id path int true "ID проверки"
 // @Param interval query string true "Интервал агрегации" Enums(1m, 5m, 1h) default:"1m"
 // @Param from query string false "Начало периода" example:"2024-01-01T00:00:00Z"
 // @Param to query string false "Конец периода" example:"2024-01-31T23:59:59Z"
+// @Param page query int false "Номер страницы" default:"1"
+// @Param page_size query int false "Размер страницы" default:"100"
 // @Success 200 {object} models.TimeIntervalResponse
 // @Failure 400 {string} string "invalid check id, interval or parameters"
 // @Failure 404 {string} string "check not found"
@@ -542,15 +544,41 @@ func (s *Server) GetCheckTimeIntervalData(w http.ResponseWriter, r *http.Request
 		to = &parsed
 	}
 
-	data, err := s.ResultRepo.GetByTimeInterval(checkID, interval, from, to)
+	page := 1
+	pageSize := 100
+	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+	if pageSizeStr := r.URL.Query().Get("page_size"); pageSizeStr != "" {
+		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 {
+			pageSize = ps
+		}
+	}
+
+	data, total, err := s.ResultRepo.GetByTimeInterval(checkID, interval, from, to, page, pageSize)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to get interval data: "+err.Error())
 		return
 	}
 
+	if data == nil {
+		data = []models.TimeIntervalData{}
+	}
+
+	totalPages := (total + pageSize - 1) / pageSize
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
 	response := models.TimeIntervalResponse{
-		Interval: interval,
-		Data:     data,
+		Interval:   interval,
+		Data:       data,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
 	}
 
 	writeJSON(w, http.StatusOK, response)
@@ -845,4 +873,77 @@ func (s *Server) GetChecks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, checks)
+}
+
+// GetRecentDashboardData godoc
+// @Summary Получить данные для графика на главной странице
+// @Description Возвращает агрегированные данные для всех проверок с пагинацией
+// @Tags results
+// @Produce json
+// @Param from query string false "Начало периода (RFC3339)" example:"2024-01-01T00:00:00Z"
+// @Param to query string false "Конец периода (RFC3339)" example:"2024-01-01T23:59:59Z"
+// @Param page query int false "Номер страницы" default:"1"
+// @Param page_size query int false "Размер страницы" default:"50"
+// @Success 200 {object} models.TimeIntervalResponse
+// @Router /dashboard/recent [get]
+func (s *Server) GetRecentDashboardData(w http.ResponseWriter, r *http.Request) {
+	var from, to *time.Time
+	fromStr := r.URL.Query().Get("from")
+	if fromStr != "" {
+		parsed, err := time.Parse(time.RFC3339, fromStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid from parameter, use RFC3339 format")
+			return
+		}
+		from = &parsed
+	}
+
+	toStr := r.URL.Query().Get("to")
+	if toStr != "" {
+		parsed, err := time.Parse(time.RFC3339, toStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid to parameter, use RFC3339 format")
+			return
+		}
+		to = &parsed
+	}
+
+	page := 1
+	pageSize := 50
+	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+	if pageSizeStr := r.URL.Query().Get("page_size"); pageSizeStr != "" {
+		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 {
+			pageSize = ps
+		}
+	}
+
+	data, total, err := s.ResultRepo.GetRecentDataForAllChecks(from, to, page, pageSize)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get recent data: "+err.Error())
+		return
+	}
+
+	if data == nil {
+		data = []models.TimeIntervalData{}
+	}
+
+	totalPages := (total + pageSize - 1) / pageSize
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	response := models.TimeIntervalResponse{
+		Interval:   "1m",
+		Data:       data,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DomainPulse - Мониторинг доменов</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌐 DomainPulse</h1>
+            <p class="subtitle">Мониторинг доменов и проверка доступности</p>
+        </header>
+
+        <div class="main-content">
+            <!-- График за последние 10 минут -->
+            <section class="card">
+                <h2>График мониторинга (последние 10 минут)</h2>
+                <div class="chart-container">
+                    <canvas id="dashboardChart"></canvas>
+                </div>
+            </section>
+
+            <!-- Секция добавления домена -->
+            <section class="card">
+                <h2>Добавить домен</h2>
+                <form id="addDomainForm" class="form">
+                    <div class="form-group">
+                        <input type="text" id="domainName" placeholder="example.com" required>
+                        <button type="submit">Добавить</button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Список доменов -->
+            <section class="card">
+                <h2>Мониторируемые домены</h2>
+                <div id="domainsList" class="domains-list">
+                    <p class="loading">Загрузка...</p>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Модальное окно для создания проверки -->
+    <div id="checkModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Создать проверку</h2>
+            <form id="addCheckForm" class="form">
+                <input type="hidden" id="checkDomainId">
+                <div class="form-group">
+                    <label>Тип проверки:</label>
+                    <select id="checkType" required>
+                        <option value="http">HTTP</option>
+                        <option value="icmp">ICMP</option>
+                        <option value="tcp">TCP</option>
+                        <option value="udp">UDP</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Интервал (секунды):</label>
+                    <input type="number" id="checkInterval" value="60" min="1" required>
+                </div>
+                <div class="form-group" id="httpParams">
+                    <label>Путь (для HTTP):</label>
+                    <input type="text" id="checkPath" placeholder="/">
+                </div>
+                <div class="form-group" id="portParams" style="display: none;">
+                    <label>Порт (для TCP/UDP):</label>
+                    <input type="number" id="checkPort" min="1" max="65535">
+                </div>
+                <div class="form-group" id="udpParams" style="display: none;">
+                    <label>Payload (для UDP, опционально):</label>
+                    <input type="text" id="checkPayload" placeholder="ping">
+                </div>
+                <div class="form-group">
+                    <label>Таймаут (мс):</label>
+                    <input type="number" id="checkTimeout" value="5000" min="1000">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="checkRealtime"> Режим реального времени
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Лимит запросов в минуту:</label>
+                    <input type="number" id="checkRateLimit" value="0" min="0" placeholder="0 = без лимита">
+                </div>
+                <button type="submit">Создать проверку</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Модальное окно для просмотра результатов -->
+    <div id="resultsModal" class="modal">
+        <div class="modal-content large">
+            <span class="close">&times;</span>
+            <h2>Результаты проверки</h2>
+            <div id="checkStats" class="stats-container"></div>
+            <div class="chart-controls" style="margin: 20px 0;">
+                <label for="intervalSelect" style="margin-right: 10px;">Период:</label>
+                <select id="intervalSelect" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #ddd;">
+                    <option value="1m">1 минута</option>
+                    <option value="5m">5 минут</option>
+                    <option value="1h">1 час</option>
+                </select>
+            </div>
+            <div class="chart-container" style="height: 300px;">
+                <canvas id="checkChart"></canvas>
+            </div>
+            <div id="resultsList" class="results-list"></div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
