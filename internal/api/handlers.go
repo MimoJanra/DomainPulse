@@ -185,9 +185,11 @@ func (s *Server) CreateCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Type            string             `json:"type"`
-		IntervalSeconds int                `json:"interval_seconds"`
-		Params          models.CheckParams `json:"params"`
+		Type               string             `json:"type"`
+		IntervalSeconds    int                `json:"interval_seconds"`
+		Params             models.CheckParams `json:"params"`
+		RealtimeMode       bool               `json:"realtime_mode,omitempty"`
+		RateLimitPerMinute int                `json:"rate_limit_per_minute,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -201,6 +203,10 @@ func (s *Server) CreateCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.IntervalSeconds <= 0 {
 		writeError(w, http.StatusBadRequest, "interval_seconds must be > 0")
+		return
+	}
+	if body.RateLimitPerMinute < 0 {
+		writeError(w, http.StatusBadRequest, "rate_limit_per_minute must be >= 0")
 		return
 	}
 
@@ -217,7 +223,12 @@ func (s *Server) CreateCheck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	check, err := s.CheckRepo.Add(domainID, body.Type, body.IntervalSeconds, body.Params, true)
+	var check models.Check
+	if body.RealtimeMode || body.RateLimitPerMinute > 0 {
+		check, err = s.CheckRepo.AddWithRealtime(domainID, body.Type, body.IntervalSeconds, body.Params, true, body.RealtimeMode, body.RateLimitPerMinute)
+	} else {
+		check, err = s.CheckRepo.Add(domainID, body.Type, body.IntervalSeconds, body.Params, true)
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to add check")
 		return
@@ -366,11 +377,13 @@ func (s *Server) GetResultsByCheckID(w http.ResponseWriter, r *http.Request) {
 // @Router /checks [post]
 func (s *Server) CreateCheckDirect(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		DomainID        int                `json:"domain_id"`
-		Type            string             `json:"type"`
-		IntervalSeconds int                `json:"interval_seconds"`
-		Params          models.CheckParams `json:"params"`
-		Enabled         bool               `json:"enabled"`
+		DomainID           int                `json:"domain_id"`
+		Type               string             `json:"type"`
+		IntervalSeconds    int                `json:"interval_seconds"`
+		Params             models.CheckParams `json:"params"`
+		Enabled            bool               `json:"enabled"`
+		RealtimeMode       bool               `json:"realtime_mode,omitempty"`
+		RateLimitPerMinute int                `json:"rate_limit_per_minute,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -398,6 +411,10 @@ func (s *Server) CreateCheckDirect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "interval_seconds must be > 0")
 		return
 	}
+	if body.RateLimitPerMinute < 0 {
+		writeError(w, http.StatusBadRequest, "rate_limit_per_minute must be >= 0")
+		return
+	}
 
 	body.Type = strings.ToLower(body.Type)
 	switch body.Type {
@@ -412,7 +429,16 @@ func (s *Server) CreateCheckDirect(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	check, err := s.CheckRepo.Add(body.DomainID, body.Type, body.IntervalSeconds, body.Params, body.Enabled)
+	var check models.Check
+	if body.RealtimeMode || body.RateLimitPerMinute > 0 {
+		var err2 error
+		check, err2 = s.CheckRepo.AddWithRealtime(body.DomainID, body.Type, body.IntervalSeconds, body.Params, body.Enabled, body.RealtimeMode, body.RateLimitPerMinute)
+		err = err2
+	} else {
+		var err2 error
+		check, err2 = s.CheckRepo.Add(body.DomainID, body.Type, body.IntervalSeconds, body.Params, body.Enabled)
+		err = err2
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to add check")
 		return
@@ -449,9 +475,11 @@ func (s *Server) UpdateCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Type            string             `json:"type"`
-		IntervalSeconds int                `json:"interval_seconds"`
-		Params          models.CheckParams `json:"params"`
+		Type               string             `json:"type"`
+		IntervalSeconds    int                `json:"interval_seconds"`
+		Params             models.CheckParams `json:"params"`
+		RealtimeMode       bool               `json:"realtime_mode,omitempty"`
+		RateLimitPerMinute int                `json:"rate_limit_per_minute,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -465,6 +493,10 @@ func (s *Server) UpdateCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.IntervalSeconds <= 0 {
 		writeError(w, http.StatusBadRequest, "interval_seconds must be > 0")
+		return
+	}
+	if body.RateLimitPerMinute < 0 {
+		writeError(w, http.StatusBadRequest, "rate_limit_per_minute must be >= 0")
 		return
 	}
 
@@ -481,7 +513,20 @@ func (s *Server) UpdateCheck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	check, err := s.CheckRepo.Update(checkID, body.Type, body.IntervalSeconds, body.Params)
+	currentCheck, err := s.CheckRepo.GetByID(checkID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get current check")
+		return
+	}
+
+	realtimeMode := body.RealtimeMode
+	rateLimit := body.RateLimitPerMinute
+	if !body.RealtimeMode && rateLimit == 0 {
+		realtimeMode = currentCheck.RealtimeMode
+		rateLimit = currentCheck.RateLimitPerMinute
+	}
+
+	check, err := s.CheckRepo.UpdateWithRealtime(checkID, body.Type, body.IntervalSeconds, body.Params, realtimeMode, rateLimit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update check")
 		return

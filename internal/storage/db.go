@@ -51,6 +51,12 @@ func InitDB() (*sql.DB, error) {
 	if err := addColumnIfMissing(db, "checks", "enabled", "INTEGER NOT NULL DEFAULT 1"); err != nil {
 		return nil, fmt.Errorf("error ensuring enabled column: %w", err)
 	}
+	if err := addColumnIfMissing(db, "checks", "realtime_mode", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return nil, fmt.Errorf("error ensuring realtime_mode column: %w", err)
+	}
+	if err := addColumnIfMissing(db, "checks", "rate_limit_per_minute", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return nil, fmt.Errorf("error ensuring rate_limit_per_minute column: %w", err)
+	}
 
 	_, err = db.Exec(`
 	CREATE TABLE IF NOT EXISTS results (

@@ -10,14 +10,16 @@ import (
 )
 
 type Scheduler struct {
-	checkRepo  *storage.CheckRepo
-	domainRepo *storage.SQLiteDomainRepo
-	resultRepo *storage.ResultRepo
-	workerPool *WorkerPool
-	tickers    map[int]*time.Ticker
-	stopChan   chan struct{}
-	mu         sync.RWMutex
-	running    bool
+	checkRepo      *storage.CheckRepo
+	domainRepo     *storage.SQLiteDomainRepo
+	resultRepo     *storage.ResultRepo
+	workerPool     *WorkerPool
+	tickers        map[int]*time.Ticker
+	realtimeLoops  map[int]chan struct{}
+	rateLimiters   map[int]*RateLimiter  
+	stopChan       chan struct{}
+	mu             sync.RWMutex
+	running        bool
 }
 
 func NewScheduler(
@@ -30,12 +32,14 @@ func NewScheduler(
 	workerPool.Start()
 
 	return &Scheduler{
-		checkRepo:  checkRepo,
-		domainRepo: domainRepo,
-		resultRepo: resultRepo,
-		workerPool: workerPool,
-		tickers:    make(map[int]*time.Ticker),
-		stopChan:   make(chan struct{}),
+		checkRepo:     checkRepo,
+		domainRepo:    domainRepo,
+		resultRepo:    resultRepo,
+		workerPool:    workerPool,
+		tickers:       make(map[int]*time.Ticker),
+		realtimeLoops: make(map[int]chan struct{}),
+		rateLimiters:  make(map[int]*RateLimiter),
+		stopChan:      make(chan struct{}),
 	}
 }
 
@@ -71,6 +75,11 @@ func (s *Scheduler) Stop() {
 		delete(s.tickers, id)
 	}
 
+	for id, stopChan := range s.realtimeLoops {
+		close(stopChan)
+		delete(s.realtimeLoops, id)
+	}
+
 	s.workerPool.Stop()
 
 	log.Println("Scheduler stopped")
@@ -101,25 +110,83 @@ func (s *Scheduler) loadAndScheduleChecks() {
 func (s *Scheduler) scheduleCheck(check models.Check) {
 	if ticker, exists := s.tickers[check.ID]; exists {
 		ticker.Stop()
+		delete(s.tickers, check.ID)
+	}
+	if stopChan, exists := s.realtimeLoops[check.ID]; exists {
+		close(stopChan)
+		delete(s.realtimeLoops, check.ID)
 	}
 
-	interval := time.Duration(check.IntervalSeconds) * time.Second
-	ticker := time.NewTicker(interval)
-
-	s.tickers[check.ID] = ticker
-
-	go s.runCheck(check)
-
-	go func(c models.Check, t *time.Ticker) {
-		for {
-			select {
-			case <-t.C:
-				s.runCheck(c)
-			case <-s.stopChan:
-				return
-			}
+	if check.RealtimeMode && check.RateLimitPerMinute > 0 {
+		minIntervalMS := 0
+		if check.RateLimitPerMinute > 0 {
+			minIntervalMS = (60 * 1000) / check.RateLimitPerMinute
 		}
-	}(check, ticker)
+		s.rateLimiters[check.ID] = NewRateLimiter(check.RateLimitPerMinute, minIntervalMS)
+	}
+
+	if check.RealtimeMode {
+		stopChan := make(chan struct{})
+		s.realtimeLoops[check.ID] = stopChan
+		
+		go s.runRealtimeLoop(check, stopChan)
+	} else {
+		interval := time.Duration(check.IntervalSeconds) * time.Second
+		ticker := time.NewTicker(interval)
+		s.tickers[check.ID] = ticker
+
+		go s.runCheck(check)
+
+		go func(c models.Check, t *time.Ticker) {
+			for {
+				select {
+				case <-t.C:
+					s.runCheck(c)
+				case <-s.stopChan:
+					return
+				}
+			}
+		}(check, ticker)
+	}
+}
+
+func (s *Scheduler) runRealtimeLoop(check models.Check, stopChan chan struct{}) {
+	for {
+		select {
+		case <-stopChan:
+			return
+		case <-s.stopChan:
+			return
+		default:
+			s.runRealtimeCheck(check, stopChan)
+		}
+	}
+}
+
+func (s *Scheduler) runRealtimeCheck(check models.Check, stopChan chan struct{}) {
+	if GlobalRateLimiter != nil {
+		GlobalRateLimiter.Wait()
+	}
+
+	s.mu.RLock()
+	limiter, hasLimiter := s.rateLimiters[check.ID]
+	s.mu.RUnlock()
+
+	if hasLimiter {
+		limiter.Wait()
+	} else if check.RateLimitPerMinute > 0 {
+		minIntervalMS := 0
+		if check.RateLimitPerMinute > 0 {
+			minIntervalMS = (60 * 1000) / check.RateLimitPerMinute
+		}
+		s.mu.Lock()
+		s.rateLimiters[check.ID] = NewRateLimiter(check.RateLimitPerMinute, minIntervalMS)
+		limiter = s.rateLimiters[check.ID]
+		s.mu.Unlock()
+		limiter.Wait()
+	}
+
+	s.runCheck(check)
 }
 
 func (s *Scheduler) runCheck(check models.Check) {
@@ -165,13 +232,30 @@ func (s *Scheduler) updateSchedule() {
 		currentCheckIDs[check.ID] = true
 
 		if check.Enabled {
-			if _, exists := s.tickers[check.ID]; !exists {
+			needsUpdate := false
+			if _, exists := s.tickers[check.ID]; exists {
+				if check.RealtimeMode {
+					needsUpdate = true
+				}
+			} else if _, realtimeExists := s.realtimeLoops[check.ID]; realtimeExists {
+				if !check.RealtimeMode {
+					needsUpdate = true
+				}
+			} else {
+				needsUpdate = true
+			}
+
+			if needsUpdate {
 				s.scheduleCheck(check)
 			}
 		} else {
 			if ticker, exists := s.tickers[check.ID]; exists {
 				ticker.Stop()
 				delete(s.tickers, check.ID)
+			}
+			if stopChan, exists := s.realtimeLoops[check.ID]; exists {
+				close(stopChan)
+				delete(s.realtimeLoops, check.ID)
 			}
 		}
 	}

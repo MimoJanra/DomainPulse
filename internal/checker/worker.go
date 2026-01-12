@@ -10,12 +10,23 @@ import (
 )
 
 type WorkerPool struct {
-	workers    int
-	jobQueue   chan CheckJob
-	wg         sync.WaitGroup
-	stopChan   chan struct{}
-	domainRepo *storage.SQLiteDomainRepo
-	resultRepo *storage.ResultRepo
+	workers        int
+	jobQueue       chan CheckJob
+	wg             sync.WaitGroup
+	stopChan       chan struct{}
+	domainRepo     *storage.SQLiteDomainRepo
+	resultRepo     *storage.ResultRepo
+	checkMetrics   map[int]*CheckMetrics
+	metricsMu      sync.RWMutex
+}
+
+type CheckMetrics struct {
+	mu                sync.Mutex
+	errorCount        int           
+	lastErrorTime     time.Time     
+	averageDuration   time.Duration 
+	sampleCount       int           
+	lastCheckTime     time.Time     
 }
 
 type CheckJob struct {
@@ -25,11 +36,12 @@ type CheckJob struct {
 
 func NewWorkerPool(workers int, domainRepo *storage.SQLiteDomainRepo, resultRepo *storage.ResultRepo) *WorkerPool {
 	return &WorkerPool{
-		workers:    workers,
-		jobQueue:   make(chan CheckJob, 100),
-		stopChan:   make(chan struct{}),
-		domainRepo: domainRepo,
-		resultRepo: resultRepo,
+		workers:      workers,
+		jobQueue:     make(chan CheckJob, 100),
+		stopChan:     make(chan struct{}),
+		domainRepo:   domainRepo,
+		resultRepo:   resultRepo,
+		checkMetrics: make(map[int]*CheckMetrics),
 	}
 }
 
@@ -89,6 +101,7 @@ func (wp *WorkerPool) worker(id int) {
 }
 
 func (wp *WorkerPool) executeCheck(job CheckJob) {
+	startTime := time.Now()
 	var result CheckResult
 	timeout := 10 * time.Second
 
@@ -134,6 +147,8 @@ func (wp *WorkerPool) executeCheck(job CheckJob) {
 		return
 	}
 
+	duration := time.Since(startTime)
+
 	res := models.Result{
 		CheckID:      job.Check.ID,
 		Status:       result.Status,
@@ -146,5 +161,45 @@ func (wp *WorkerPool) executeCheck(job CheckJob) {
 
 	if err := wp.resultRepo.Add(res); err != nil {
 		log.Printf("failed to save result for check %d: %v", job.Check.ID, err)
+	}
+
+	wp.updateMetrics(job.Check.ID, duration, result.Status == "error" || result.Status == "timeout")
+}
+
+func (wp *WorkerPool) updateMetrics(checkID int, duration time.Duration, isError bool) {
+	wp.metricsMu.Lock()
+	defer wp.metricsMu.Unlock()
+
+	metrics, exists := wp.checkMetrics[checkID]
+	if !exists {
+		metrics = &CheckMetrics{}
+		wp.checkMetrics[checkID] = metrics
+	}
+
+	metrics.mu.Lock()
+	defer metrics.mu.Unlock()
+
+	now := time.Now()
+
+	if isError {
+		metrics.errorCount++
+		metrics.lastErrorTime = now
+	} else {
+		metrics.errorCount = 0
+	}
+
+	if metrics.sampleCount < 10 {
+		metrics.sampleCount++
+		metrics.averageDuration = (metrics.averageDuration*time.Duration(metrics.sampleCount-1) + duration) / time.Duration(metrics.sampleCount)
+	} else {
+		alpha := 0.2 
+		metrics.averageDuration = time.Duration(float64(metrics.averageDuration)*(1-alpha) + float64(duration)*alpha)
+	}
+
+	metrics.lastCheckTime = now
+
+	if metrics.errorCount >= 5 || metrics.averageDuration > 5*time.Second {
+		log.Printf("Check %d: overload detected (errors: %d, avg duration: %v). Consider reducing frequency.", 
+			checkID, metrics.errorCount, metrics.averageDuration)
 	}
 }

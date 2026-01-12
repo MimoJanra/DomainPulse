@@ -43,6 +43,8 @@ func main() {
 	checkRepo := storage.NewCheckRepo(db)
 	resultRepo := storage.NewResultRepo(db)
 
+	checker.InitGlobalRateLimiter(1000)
+
 	workerCount := 5
 	scheduler := checker.NewScheduler(checkRepo, domainRepo, resultRepo, workerCount)
 
