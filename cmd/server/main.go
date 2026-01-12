@@ -4,8 +4,12 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/MimoJanra/DomainPulse/internal/api"
+	"github.com/MimoJanra/DomainPulse/internal/checker"
 	"github.com/MimoJanra/DomainPulse/internal/storage"
 )
 
@@ -39,6 +43,12 @@ func main() {
 	checkRepo := storage.NewCheckRepo(db)
 	resultRepo := storage.NewResultRepo(db)
 
+	workerCount := 5
+	scheduler := checker.NewScheduler(checkRepo, domainRepo, resultRepo, workerCount)
+
+	scheduler.Start()
+	defer scheduler.Stop()
+
 	server := &api.Server{
 		DomainRepo: domainRepo,
 		CheckRepo:  checkRepo,
@@ -47,8 +57,18 @@ func main() {
 
 	r := api.SetupRouter(server)
 
-	log.Println("Server started on :8080")
-	if err := http.ListenAndServe(":8080", r); err != nil {
-		log.Fatal(err)
-	}
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		log.Println("Server started on :8080")
+		if err := http.ListenAndServe(":8080", r); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	<-sigChan
+	log.Println("Shutting down server...")
+	scheduler.Stop()
+	log.Println("Server stopped")
 }

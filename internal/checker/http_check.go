@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-type HTTPResult struct {
+type CheckResult struct {
 	Status       string
 	StatusCode   int
 	DurationMS   int
@@ -15,7 +15,9 @@ type HTTPResult struct {
 	ErrorMessage string
 }
 
-func RunHTTPCheck(url string, timeout time.Duration) HTTPResult {
+type HTTPResult = CheckResult
+
+func RunHTTPCheck(url string, timeout time.Duration) CheckResult {
 	client := http.Client{Timeout: timeout}
 
 	start := time.Now()
@@ -25,20 +27,21 @@ func RunHTTPCheck(url string, timeout time.Duration) HTTPResult {
 	if err != nil {
 		errorMsg := err.Error()
 		status := "timeout"
+		outcome := "timeout"
 		if !isTimeoutError(err) {
 			status = "error"
+			outcome = "error"
 		}
-		return HTTPResult{
+		return CheckResult{
 			Status:       status,
 			DurationMS:   int(duration),
-			Outcome:      "error",
+			Outcome:      outcome,
 			ErrorMessage: errorMsg,
 		}
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-
 		}
 	}(resp.Body)
 
@@ -52,7 +55,7 @@ func RunHTTPCheck(url string, timeout time.Duration) HTTPResult {
 		outcome = "5xx"
 	}
 
-	return HTTPResult{
+	return CheckResult{
 		Status:       status,
 		StatusCode:   resp.StatusCode,
 		DurationMS:   int(duration),
@@ -66,5 +69,8 @@ func isTimeoutError(err error) bool {
 		return false
 	}
 	errStr := err.Error()
-	return strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded") || strings.Contains(errStr, "i/o timeout")
+	return strings.Contains(errStr, "timeout") || 
+		strings.Contains(errStr, "deadline exceeded") || 
+		strings.Contains(errStr, "i/o timeout") ||
+		strings.Contains(errStr, "context deadline exceeded")
 }

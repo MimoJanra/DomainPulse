@@ -249,7 +249,12 @@ func (s *Server) RunChecks(w http.ResponseWriter, _ *http.Request) {
 			continue
 		}
 
-		var resData checker.HTTPResult
+		var resData checker.CheckResult
+		timeout := 10 * time.Second
+		if check.Params.TimeoutMS > 0 {
+			timeout = time.Duration(check.Params.TimeoutMS) * time.Millisecond
+		}
+
 		switch check.Type {
 		case "http":
 			path := check.Params.Path
@@ -261,7 +266,24 @@ func (s *Server) RunChecks(w http.ResponseWriter, _ *http.Request) {
 				fullURL += "/"
 			}
 			fullURL += path
-			resData = checker.RunHTTPCheck(fullURL, 10*time.Second)
+			resData = checker.RunHTTPCheck(fullURL, timeout)
+		case "icmp":
+			resData = checker.RunICMPCheck(domain.Name, timeout)
+		case "tcp":
+			port := check.Params.Port
+			if port <= 0 {
+				log.Printf("invalid port for TCP check %d", check.ID)
+				continue
+			}
+			resData = checker.RunTCPCheck(domain.Name, port, timeout)
+		case "udp":
+			port := check.Params.Port
+			if port <= 0 {
+				log.Printf("invalid port for UDP check %d", check.ID)
+				continue
+			}
+			payload := check.Params.Payload
+			resData = checker.RunUDPCheck(domain.Name, port, payload, timeout)
 		default:
 			log.Printf("check type %s not yet executable, skipping check %d", check.Type, check.ID)
 			continue
