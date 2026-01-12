@@ -21,20 +21,3 @@ type Result struct {
 	Outcome    string `json:"outcome" example:"success"`
 	CreatedAt  string `json:"created_at" example:"2024-01-01T12:00:00Z"`
 }
-
-type Check struct {
-	ID        int    `json:"id"`
-	DomainID  int    `json:"domain_id"`
-	Type      string `json:"type"`
-	Frequency string `json:"frequency"`
-	Path      string `json:"path"`
-}
-
-type Result struct {
-	ID         int    `json:"id"`
-	CheckID    int    `json:"check_id"`
-	StatusCode int    `json:"status_code"`
-	DurationMS int    `json:"duration_ms"`
-	Outcome    string `json:"outcome"`
-	CreatedAt  string `json:"created_at"`
-}

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"log"
 
 	"github.com/MimoJanra/DomainPulse/internal/models"
 )
@@ -19,7 +20,12 @@ func (r *SQLiteDomainRepo) GetAll() ([]models.Domain, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Printf("%v", err)
+		}
+	}(rows)
 
 	var domains []models.Domain
 	for rows.Next() {

@@ -1,9 +1,6 @@
 package api
 
 import (
-	"DomainPulse/internal/checker"
-	"DomainPulse/internal/models"
-	"DomainPulse/internal/storage"
 	"encoding/json"
 	"errors"
 	"log"
