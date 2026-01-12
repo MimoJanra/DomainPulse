@@ -9,7 +9,7 @@ import (
 func RunTCPCheck(host string, port int, timeout time.Duration) CheckResult {
 	start := time.Now()
 
-	address := fmt.Sprintf("%s:%d", host, port)
+	address := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 
 	conn, err := net.DialTimeout("tcp", address, timeout)
 	duration := time.Since(start).Milliseconds()

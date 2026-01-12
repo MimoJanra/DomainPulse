@@ -9,7 +9,7 @@ import (
 func RunUDPCheck(host string, port int, payload string, timeout time.Duration) CheckResult {
 	start := time.Now()
 
-	address := fmt.Sprintf("%s:%d", host, port)
+	address := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 
 	conn, err := net.DialTimeout("udp", address, timeout)
 	if err != nil {
