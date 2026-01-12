@@ -101,7 +101,7 @@ func (r *ResultRepo) GetByCheckIDWithPagination(checkID int, from, to *time.Time
 		FROM results
 		WHERE check_id = ?
 	`
-	args := []interface{}{checkID}
+	args := []any{checkID}
 
 	if from != nil {
 		query += " AND created_at >= ?"
@@ -131,7 +131,7 @@ func (r *ResultRepo) GetByCheckIDWithPagination(checkID int, from, to *time.Time
 	}
 
 	countQuery := "SELECT COUNT(*) FROM results WHERE check_id = ?"
-	countArgs := []interface{}{checkID}
+	countArgs := []any{checkID}
 	if from != nil {
 		countQuery += " AND created_at >= ?"
 		countArgs = append(countArgs, from.Format(time.RFC3339))
@@ -151,9 +151,9 @@ func (r *ResultRepo) GetByCheckIDWithPagination(checkID int, from, to *time.Time
 }
 
 type Stats struct {
-	TotalResults      int            `json:"total_results"`
-	StatusDistribution map[string]int `json:"status_distribution"`
-	LatencyStats      models.LatencyStats `json:"latency_stats"`
+	TotalResults       int                 `json:"total_results"`
+	StatusDistribution map[string]int      `json:"status_distribution"`
+	LatencyStats       models.LatencyStats `json:"latency_stats"`
 }
 
 func (r *ResultRepo) GetStats(checkID int, from, to *time.Time) (Stats, error) {
@@ -161,7 +161,7 @@ func (r *ResultRepo) GetStats(checkID int, from, to *time.Time) (Stats, error) {
 	stats.StatusDistribution = make(map[string]int)
 
 	query := "SELECT status, duration_ms FROM results WHERE check_id = ?"
-	args := []interface{}{checkID}
+	args := []any{checkID}
 
 	if from != nil {
 		query += " AND created_at >= ?"
@@ -285,7 +285,7 @@ func (r *ResultRepo) GetByTimeInterval(checkID int, interval string, from, to *t
 		WHERE check_id = ?
 	`, timeTruncate)
 
-	args := []interface{}{checkID}
+	args := []any{checkID}
 
 	if from != nil {
 		query += " AND created_at >= ?"
@@ -328,7 +328,7 @@ func (r *ResultRepo) GetByTimeInterval(checkID int, interval string, from, to *t
 			FROM results 
 			WHERE check_id = ? AND %s = ?
 		`, timeTruncate)
-		statusArgs := []interface{}{checkID, timestamp}
+		statusArgs := []any{checkID, timestamp}
 		if from != nil {
 			statusQuery += " AND created_at >= ?"
 			statusArgs = append(statusArgs, from.Format(time.RFC3339))

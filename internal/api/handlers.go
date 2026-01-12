@@ -658,7 +658,6 @@ func (s *Server) UpdateCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify check exists
 	_, err = s.CheckRepo.GetByID(checkID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "check not found")
@@ -744,7 +743,6 @@ func (s *Server) EnableCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify check exists
 	_, err = s.CheckRepo.GetByID(checkID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "check not found")
@@ -777,7 +775,6 @@ func (s *Server) DisableCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify check exists
 	_, err = s.CheckRepo.GetByID(checkID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "check not found")
@@ -810,7 +807,6 @@ func (s *Server) DeleteCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify check exists
 	_, err = s.CheckRepo.GetByID(checkID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "check not found")
