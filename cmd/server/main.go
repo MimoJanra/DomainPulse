@@ -2,32 +2,52 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 
-	"DomainPulse/internal/api"
-	"DomainPulse/internal/storage"
+	"github.com/MimoJanra/DomainPulse/internal/api"
+	"github.com/MimoJanra/DomainPulse/internal/storage"
 )
 
+// @title           DomainPulse API
+// @version         1.0
+// @description     REST API для мониторинга доменов и HTTP-проверок.
+// @termsOfService  http://swagger.io/terms/
+
+// @contact.name   API Support
+// @contact.url    http://www.swagger.io/support
+// @contact.email  support@swagger.io
+
+// @license.name  Apache 2.0
+// @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host      localhost:8080
+// @BasePath  /
+// @schemes   http
 func main() {
 	db, err := storage.InitDB()
 	if err != nil {
 		log.Fatalf("failed to init db: %v", err)
 	}
 	defer func(db *sql.DB) {
-		err := db.Close()
-		if err != nil {
-			log.Fatalf("failed to close db: %v", err)
+		if err := db.Close(); err != nil {
+			log.Printf("failed to close db: %v", err)
 		}
 	}(db)
 
-	repo := storage.NewSQLiteDomainRepo(db)
-	server := &api.Server{DomainRepo: repo}
+	domainRepo := storage.NewSQLiteDomainRepo(db)
+	checkRepo := storage.NewCheckRepo(db)
+	resultRepo := storage.NewResultRepo(db)
+
+	server := &api.Server{
+		DomainRepo: domainRepo,
+		CheckRepo:  checkRepo,
+		ResultRepo: resultRepo,
+	}
 
 	r := api.SetupRouter(server)
 
-	fmt.Println("Server started on :8080")
+	log.Println("Server started on :8080")
 	if err := http.ListenAndServe(":8080", r); err != nil {
 		log.Fatal(err)
 	}

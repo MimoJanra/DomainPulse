@@ -1,0 +1,180 @@
+basePath: /
+definitions:
+  models.Check:
+    properties:
+      domain_id:
+        example: 1
+        type: integer
+      frequency:
+        example: 5m
+        type: string
+      id:
+        example: 1
+        type: integer
+      path:
+        example: /
+        type: string
+      type:
+        example: http
+        type: string
+    type: object
+  models.Domain:
+    properties:
+      id:
+        example: 1
+        type: integer
+      name:
+        example: example.com
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: REST API для мониторинга доменов и HTTP-проверок.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: DomainPulse API
+  version: "1.0"
+paths:
+  /domains:
+    get:
+      description: Возвращает список всех доменов в системе
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Domain'
+            type: array
+      summary: Получить список доменов
+      tags:
+      - domains
+    post:
+      consumes:
+      - application/json
+      description: Добавляет домен для мониторинга
+      parameters:
+      - description: Данные домена
+        in: body
+        name: domain
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Domain'
+        "400":
+          description: invalid request body
+          schema:
+            type: string
+      summary: Добавить новый домен
+      tags:
+      - domains
+  /domains/{id}:
+    delete:
+      description: Удаляет домен по ID
+      parameters:
+      - description: ID домена
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: integer
+            type: object
+        "404":
+          description: domain not found
+          schema:
+            type: string
+      summary: Удалить домен
+      tags:
+      - domains
+  /domains/{id}/checks:
+    get:
+      description: Возвращает список всех проверок, связанных с доменом
+      parameters:
+      - description: ID домена
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Check'
+            type: array
+        "400":
+          description: invalid domain id
+          schema:
+            type: string
+      summary: Получить проверки для домена
+      tags:
+      - checks
+    post:
+      consumes:
+      - application/json
+      description: Добавляет новую HTTP-проверку для домена
+      parameters:
+      - description: ID домена
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Параметры проверки
+        in: body
+        name: check
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Check'
+        "400":
+          description: invalid request body
+          schema:
+            type: string
+      summary: Добавить проверку для домена
+      tags:
+      - checks
+  /run-check:
+    post:
+      description: Выполняет все проверки и записывает результаты в БД
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Запустить все проверки вручную
+      tags:
+      - checks
+schemes:
+- http
+swagger: "2.0"
