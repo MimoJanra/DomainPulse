@@ -34,4 +34,7 @@ require (
 	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/tools v0.38.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
+require (
+	github.com/go-chi/chi/v5 v5.2.3
+	github.com/mattn/go-sqlite3 v1.14.32
 )
