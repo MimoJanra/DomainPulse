@@ -48,6 +48,9 @@ func InitDB() (*sql.DB, error) {
 	if err := addColumnIfMissing(db, "checks", "params", "TEXT NOT NULL DEFAULT '{}'"); err != nil {
 		return nil, fmt.Errorf("error ensuring params column: %w", err)
 	}
+	if err := addColumnIfMissing(db, "checks", "enabled", "INTEGER NOT NULL DEFAULT 1"); err != nil {
+		return nil, fmt.Errorf("error ensuring enabled column: %w", err)
+	}
 
 	_, err = db.Exec(`
 	CREATE TABLE IF NOT EXISTS results (

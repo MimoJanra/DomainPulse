@@ -217,7 +217,7 @@ func (s *Server) CreateCheck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	check, err := s.CheckRepo.Add(domainID, body.Type, body.IntervalSeconds, body.Params)
+	check, err := s.CheckRepo.Add(domainID, body.Type, body.IntervalSeconds, body.Params, true)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to add check")
 		return
@@ -234,7 +234,7 @@ func (s *Server) CreateCheck(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} map[string]interface{}
 // @Router /run-check [post]
 func (s *Server) RunChecks(w http.ResponseWriter, _ *http.Request) {
-	checks, err := s.CheckRepo.GetAll()
+	checks, err := s.CheckRepo.GetAll(nil)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to load checks")
 		return
@@ -330,4 +330,265 @@ func (s *Server) GetResultsByCheckID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, results)
+}
+
+// CreateCheckDirect godoc
+// @Summary Создать проверку
+// @Description Создает новую проверку (http, icmp, tcp, udp) с указанием domain_id в теле запроса
+// @Tags checks
+// @Accept json
+// @Produce json
+// @Param check body object true "Параметры проверки" example({"domain_id": 1, "type": "http", "interval_seconds": 60, "params": {"path": "/health"}})
+// @Success 201 {object} models.Check
+// @Failure 400 {string} string "invalid request body"
+// @Router /checks [post]
+func (s *Server) CreateCheckDirect(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		DomainID        int                `json:"domain_id"`
+		Type            string             `json:"type"`
+		IntervalSeconds int                `json:"interval_seconds"`
+		Params          models.CheckParams `json:"params"`
+		Enabled         bool               `json:"enabled"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if body.DomainID <= 0 {
+		writeError(w, http.StatusBadRequest, "domain_id is required and must be > 0")
+		return
+	}
+
+	// Verify domain exists
+	_, err := s.DomainRepo.GetByID(body.DomainID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "domain not found")
+		return
+	}
+
+	if _, ok := supportedCheckTypes[strings.ToLower(body.Type)]; !ok {
+		writeError(w, http.StatusBadRequest, "unsupported check type")
+		return
+	}
+	if body.IntervalSeconds <= 0 {
+		writeError(w, http.StatusBadRequest, "interval_seconds must be > 0")
+		return
+	}
+
+	body.Type = strings.ToLower(body.Type)
+	switch body.Type {
+	case "http":
+		if body.Params.Path == "" {
+			body.Params.Path = "/"
+		}
+	case "tcp", "udp":
+		if body.Params.Port <= 0 {
+			writeError(w, http.StatusBadRequest, "port is required for tcp/udp checks")
+			return
+		}
+	}
+
+	check, err := s.CheckRepo.Add(body.DomainID, body.Type, body.IntervalSeconds, body.Params, body.Enabled)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to add check")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, check)
+}
+
+// UpdateCheck godoc
+// @Summary Редактировать проверку
+// @Description Обновляет параметры проверки
+// @Tags checks
+// @Accept json
+// @Produce json
+// @Param id path int true "ID проверки"
+// @Param check body object true "Параметры проверки" example({"type": "http", "interval_seconds": 120, "params": {"path": "/api/health"}})
+// @Success 200 {object} models.Check
+// @Failure 400 {string} string "invalid request body"
+// @Failure 404 {string} string "check not found"
+// @Router /checks/{id} [put]
+func (s *Server) UpdateCheck(w http.ResponseWriter, r *http.Request) {
+	checkIDStr := chi.URLParam(r, "id")
+	checkID, err := strconv.Atoi(checkIDStr)
+	if err != nil || checkID <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid check id")
+		return
+	}
+
+	// Verify check exists
+	_, err = s.CheckRepo.GetByID(checkID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "check not found")
+		return
+	}
+
+	var body struct {
+		Type            string             `json:"type"`
+		IntervalSeconds int                `json:"interval_seconds"`
+		Params          models.CheckParams `json:"params"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if _, ok := supportedCheckTypes[strings.ToLower(body.Type)]; !ok {
+		writeError(w, http.StatusBadRequest, "unsupported check type")
+		return
+	}
+	if body.IntervalSeconds <= 0 {
+		writeError(w, http.StatusBadRequest, "interval_seconds must be > 0")
+		return
+	}
+
+	body.Type = strings.ToLower(body.Type)
+	switch body.Type {
+	case "http":
+		if body.Params.Path == "" {
+			body.Params.Path = "/"
+		}
+	case "tcp", "udp":
+		if body.Params.Port <= 0 {
+			writeError(w, http.StatusBadRequest, "port is required for tcp/udp checks")
+			return
+		}
+	}
+
+	check, err := s.CheckRepo.Update(checkID, body.Type, body.IntervalSeconds, body.Params)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update check")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, check)
+}
+
+// EnableCheck godoc
+// @Summary Включить проверку
+// @Description Включает проверку для выполнения
+// @Tags checks
+// @Produce json
+// @Param id path int true "ID проверки"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {string} string "invalid check id"
+// @Failure 404 {string} string "check not found"
+// @Router /checks/{id}/enable [post]
+func (s *Server) EnableCheck(w http.ResponseWriter, r *http.Request) {
+	checkIDStr := chi.URLParam(r, "id")
+	checkID, err := strconv.Atoi(checkIDStr)
+	if err != nil || checkID <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid check id")
+		return
+	}
+
+	// Verify check exists
+	_, err = s.CheckRepo.GetByID(checkID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "check not found")
+		return
+	}
+
+	if err := s.CheckRepo.SetEnabled(checkID, true); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to enable check")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"id": checkID, "enabled": true})
+}
+
+// DisableCheck godoc
+// @Summary Отключить проверку
+// @Description Отключает проверку от выполнения
+// @Tags checks
+// @Produce json
+// @Param id path int true "ID проверки"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {string} string "invalid check id"
+// @Failure 404 {string} string "check not found"
+// @Router /checks/{id}/disable [post]
+func (s *Server) DisableCheck(w http.ResponseWriter, r *http.Request) {
+	checkIDStr := chi.URLParam(r, "id")
+	checkID, err := strconv.Atoi(checkIDStr)
+	if err != nil || checkID <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid check id")
+		return
+	}
+
+	// Verify check exists
+	_, err = s.CheckRepo.GetByID(checkID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "check not found")
+		return
+	}
+
+	if err := s.CheckRepo.SetEnabled(checkID, false); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to disable check")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"id": checkID, "enabled": false})
+}
+
+// DeleteCheck godoc
+// @Summary Удалить проверку
+// @Description Удаляет проверку по ID
+// @Tags checks
+// @Produce json
+// @Param id path int true "ID проверки"
+// @Success 200 {object} map[string]int
+// @Failure 400 {string} string "invalid check id"
+// @Failure 404 {string} string "check not found"
+// @Router /checks/{id} [delete]
+func (s *Server) DeleteCheck(w http.ResponseWriter, r *http.Request) {
+	checkIDStr := chi.URLParam(r, "id")
+	checkID, err := strconv.Atoi(checkIDStr)
+	if err != nil || checkID <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid check id")
+		return
+	}
+
+	// Verify check exists
+	_, err = s.CheckRepo.GetByID(checkID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "check not found")
+		return
+	}
+
+	if err := s.CheckRepo.Delete(checkID); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to delete check")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": checkID})
+}
+
+// GetChecks godoc
+// @Summary Получить список проверок
+// @Description Возвращает список проверок с опциональной фильтрацией по domain_id
+// @Tags checks
+// @Produce json
+// @Param domain_id query int false "ID домена для фильтрации"
+// @Success 200 {array} models.Check
+// @Router /checks [get]
+func (s *Server) GetChecks(w http.ResponseWriter, r *http.Request) {
+	var domainID *int
+	domainIDStr := r.URL.Query().Get("domain_id")
+	if domainIDStr != "" {
+		id, err := strconv.Atoi(domainIDStr)
+		if err == nil && id > 0 {
+			domainID = &id
+		}
+	}
+
+	checks, err := s.CheckRepo.GetAll(domainID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get checks")
+		return
+	}
+	writeJSON(w, http.StatusOK, checks)
 }

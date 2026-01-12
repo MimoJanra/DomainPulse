@@ -18,6 +18,7 @@ type Check struct {
 	Type            string      `json:"type" example:"http"`
 	IntervalSeconds int         `json:"interval_seconds" example:"60"`
 	Params          CheckParams `json:"params"`
+	Enabled         bool        `json:"enabled" example:"true"`
 	Frequency       string      `json:"frequency,omitempty" example:"60s"`
 	Path            string      `json:"path,omitempty" example:"/"`
 }

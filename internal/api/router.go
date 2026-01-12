@@ -37,5 +37,20 @@ func SetupRouter(s *Server) http.Handler {
 		s.GetResultsByCheckID(w, r)
 	})
 
+	r.Get("/checks", s.GetChecks)
+	r.Post("/checks", s.CreateCheckDirect)
+	r.Put("/checks/{id}", func(w http.ResponseWriter, r *http.Request) {
+		s.UpdateCheck(w, r)
+	})
+	r.Delete("/checks/{id}", func(w http.ResponseWriter, r *http.Request) {
+		s.DeleteCheck(w, r)
+	})
+	r.Post("/checks/{id}/enable", func(w http.ResponseWriter, r *http.Request) {
+		s.EnableCheck(w, r)
+	})
+	r.Post("/checks/{id}/disable", func(w http.ResponseWriter, r *http.Request) {
+		s.DisableCheck(w, r)
+	})
+
 	return r
 }
