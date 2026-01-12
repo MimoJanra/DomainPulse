@@ -32,6 +32,10 @@ func SetupRouter(s *Server) http.Handler {
 		s.CreateCheck(w, r)
 	})
 	r.Post("/run-check", s.RunChecks)
+	r.Get("/results", s.GetResults)
+	r.Get("/checks/{id}/results", func(w http.ResponseWriter, r *http.Request) {
+		s.GetResultsByCheckID(w, r)
+	})
 
 	return r
 }

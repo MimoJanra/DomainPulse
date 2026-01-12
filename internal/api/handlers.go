@@ -38,6 +38,13 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 
 var domainRegex = regexp.MustCompile(`^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$`)
 
+var supportedCheckTypes = map[string]struct{}{
+	"http": {},
+	"icmp": {},
+	"tcp":  {},
+	"udp":  {},
+}
+
 func validateDomain(raw string) (string, error) {
 	raw = strings.TrimSpace(strings.ToLower(raw))
 	if raw == "" {
@@ -160,12 +167,12 @@ func (s *Server) GetCheck(w http.ResponseWriter, r *http.Request) {
 
 // CreateCheck godoc
 // @Summary Добавить проверку для домена
-// @Description Добавляет новую HTTP-проверку для домена
+// @Description Добавляет новую проверку (http, icmp, tcp, udp) для домена
 // @Tags checks
 // @Accept json
 // @Produce json
 // @Param id path int true "ID домена"
-// @Param check body object true "Параметры проверки" example({"type": "http", "frequency": "5m", "path": "/"})
+// @Param check body object true "Параметры проверки" example({"type": "http", "interval_seconds": 60, "params": {"path": "/health"}})
 // @Success 201 {object} models.Check
 // @Failure 400 {string} string "invalid request body"
 // @Router /domains/{id}/checks [post]
@@ -178,9 +185,9 @@ func (s *Server) CreateCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Type      string `json:"type"`
-		Frequency string `json:"frequency"`
-		Path      string `json:"path"`
+		Type            string             `json:"type"`
+		IntervalSeconds int                `json:"interval_seconds"`
+		Params          models.CheckParams `json:"params"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -188,12 +195,29 @@ func (s *Server) CreateCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if body.Type == "" || body.Frequency == "" || body.Path == "" {
-		writeError(w, http.StatusBadRequest, "missing required fields")
+	if _, ok := supportedCheckTypes[strings.ToLower(body.Type)]; !ok {
+		writeError(w, http.StatusBadRequest, "unsupported check type")
+		return
+	}
+	if body.IntervalSeconds <= 0 {
+		writeError(w, http.StatusBadRequest, "interval_seconds must be > 0")
 		return
 	}
 
-	check, err := s.CheckRepo.Add(domainID, body.Type, body.Frequency, body.Path)
+	body.Type = strings.ToLower(body.Type)
+	switch body.Type {
+	case "http":
+		if body.Params.Path == "" {
+			body.Params.Path = "/"
+		}
+	case "tcp", "udp":
+		if body.Params.Port <= 0 {
+			writeError(w, http.StatusBadRequest, "port is required for tcp/udp checks")
+			return
+		}
+	}
+
+	check, err := s.CheckRepo.Add(domainID, body.Type, body.IntervalSeconds, body.Params)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to add check")
 		return
@@ -225,20 +249,32 @@ func (s *Server) RunChecks(w http.ResponseWriter, _ *http.Request) {
 			continue
 		}
 
-		fullURL := "https://" + domain.Name
-		if !strings.HasPrefix(check.Path, "/") {
-			fullURL += "/"
+		var resData checker.HTTPResult
+		switch check.Type {
+		case "http":
+			path := check.Params.Path
+			if path == "" {
+				path = "/"
+			}
+			fullURL := "https://" + domain.Name
+			if !strings.HasPrefix(path, "/") {
+				fullURL += "/"
+			}
+			fullURL += path
+			resData = checker.RunHTTPCheck(fullURL, 10*time.Second)
+		default:
+			log.Printf("check type %s not yet executable, skipping check %d", check.Type, check.ID)
+			continue
 		}
-		fullURL += check.Path
-
-		resData := checker.RunHTTPCheck(fullURL, 10*time.Second)
 
 		res := models.Result{
-			CheckID:    check.ID,
-			StatusCode: resData.StatusCode,
-			DurationMS: resData.DurationMS,
-			Outcome:    resData.Outcome,
-			CreatedAt:  time.Now().Format(time.RFC3339),
+			CheckID:      check.ID,
+			Status:       resData.Status,
+			StatusCode:   resData.StatusCode,
+			DurationMS:   resData.DurationMS,
+			Outcome:      resData.Outcome,
+			ErrorMessage: resData.ErrorMessage,
+			CreatedAt:    time.Now().Format(time.RFC3339),
 		}
 
 		if err := s.ResultRepo.Add(res); err != nil {
@@ -253,4 +289,45 @@ func (s *Server) RunChecks(w http.ResponseWriter, _ *http.Request) {
 		"count":   len(results),
 		"results": results,
 	})
+}
+
+// GetResults godoc
+// @Summary Получить результаты проверок
+// @Description Возвращает список всех результатов проверок
+// @Tags results
+// @Produce json
+// @Success 200 {array} models.Result
+// @Router /results [get]
+func (s *Server) GetResults(w http.ResponseWriter, _ *http.Request) {
+	results, err := s.ResultRepo.GetAll()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get results")
+		return
+	}
+	writeJSON(w, http.StatusOK, results)
+}
+
+// GetResultsByCheckID godoc
+// @Summary Получить результаты проверки
+// @Description Возвращает список результатов для конкретной проверки
+// @Tags results
+// @Produce json
+// @Param id path int true "ID проверки"
+// @Success 200 {array} models.Result
+// @Failure 400 {string} string "invalid check id"
+// @Router /checks/{id}/results [get]
+func (s *Server) GetResultsByCheckID(w http.ResponseWriter, r *http.Request) {
+	checkIDStr := chi.URLParam(r, "id")
+	checkID, err := strconv.Atoi(checkIDStr)
+	if err != nil || checkID <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid check id")
+		return
+	}
+
+	results, err := s.ResultRepo.GetByCheckID(checkID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get results")
+		return
+	}
+	writeJSON(w, http.StatusOK, results)
 }
