@@ -3,13 +3,14 @@ package checker
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"time"
 )
 
 func RunUDPCheck(host string, port int, payload string, timeout time.Duration) CheckResult {
 	start := time.Now()
 
-	address := net.JoinHostPort(host, fmt.Sprintf("%d", port))
+	address := net.JoinHostPort(host, strconv.Itoa(port))
 
 	conn, err := net.DialTimeout("udp", address, timeout)
 	if err != nil {

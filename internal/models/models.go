@@ -19,7 +19,6 @@ type Check struct {
 	IntervalSeconds    int         `json:"interval_seconds" example:"60"`
 	Params             CheckParams `json:"params"`
 	Enabled            bool        `json:"enabled" example:"true"`
-	Frequency          string      `json:"frequency,omitempty" example:"60s"`
 	Path               string      `json:"path,omitempty" example:"/"`
 	RealtimeMode       bool        `json:"realtime_mode,omitempty" example:"false"`
 	RateLimitPerMinute int         `json:"rate_limit_per_minute,omitempty" example:"60"`

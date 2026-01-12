@@ -199,7 +199,7 @@ func (wp *WorkerPool) updateMetrics(checkID int, duration time.Duration, isError
 	metrics.lastCheckTime = now
 
 	if metrics.errorCount >= 5 || metrics.averageDuration > 5*time.Second {
-		log.Printf("Check %d: overload detected (errors: %d, avg duration: %v). Consider reducing frequency.", 
+		log.Printf("Check %d: overload detected (errors: %d, avg duration: %v). Consider reducing interval.", 
 			checkID, metrics.errorCount, metrics.averageDuration)
 	}
 }

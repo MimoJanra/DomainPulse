@@ -28,7 +28,6 @@ func (r *CheckRepo) AddWithRealtime(domainID int, checkType string, intervalSeco
 		return models.Check{}, fmt.Errorf("marshal params: %w", err)
 	}
 
-	frequency := fmt.Sprintf("%ds", intervalSeconds)
 	path := params.Path
 	enabledInt := 0
 	if enabled {
@@ -40,8 +39,8 @@ func (r *CheckRepo) AddWithRealtime(domainID int, checkType string, intervalSeco
 	}
 
 	res, err := r.db.Exec(
-		"INSERT INTO checks(domain_id, type, frequency, path, interval_seconds, params, enabled, realtime_mode, rate_limit_per_minute) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		domainID, checkType, frequency, path, intervalSeconds, string(paramsJSON), enabledInt, realtimeInt, rateLimitPerMinute,
+		"INSERT INTO checks(domain_id, type, path, interval_seconds, params, enabled, realtime_mode, rate_limit_per_minute) VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+		domainID, checkType, path, intervalSeconds, string(paramsJSON), enabledInt, realtimeInt, rateLimitPerMinute,
 	)
 	if err != nil {
 		return models.Check{}, err
@@ -51,7 +50,6 @@ func (r *CheckRepo) AddWithRealtime(domainID int, checkType string, intervalSeco
 		ID:                int(id),
 		DomainID:          domainID,
 		Type:              checkType,
-		Frequency:         frequency,
 		Path:              path,
 		IntervalSeconds:   intervalSeconds,
 		Params:            params,
@@ -62,7 +60,7 @@ func (r *CheckRepo) AddWithRealtime(domainID int, checkType string, intervalSeco
 }
 
 func (r *CheckRepo) GetByDomainID(domainID int) ([]models.Check, error) {
-	rows, err := r.db.Query("SELECT id, domain_id, type, frequency, path, interval_seconds, params, enabled, realtime_mode, rate_limit_per_minute FROM checks WHERE domain_id = ?", domainID)
+	rows, err := r.db.Query("SELECT id, domain_id, type, path, interval_seconds, params, enabled, realtime_mode, rate_limit_per_minute FROM checks WHERE domain_id = ?", domainID)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +75,7 @@ func (r *CheckRepo) GetByDomainID(domainID int) ([]models.Check, error) {
 			realtimeInt      int
 			rateLimitPerMin  int
 		)
-		if err := rows.Scan(&c.ID, &c.DomainID, &c.Type, &c.Frequency, &c.Path, &c.IntervalSeconds, &paramsJSON, &enabledInt, &realtimeInt, &rateLimitPerMin); err != nil {
+		if err := rows.Scan(&c.ID, &c.DomainID, &c.Type, &c.Path, &c.IntervalSeconds, &paramsJSON, &enabledInt, &realtimeInt, &rateLimitPerMin); err != nil {
 			return nil, err
 		}
 		c.Params = parseParams(paramsJSON)
@@ -97,9 +95,9 @@ func (r *CheckRepo) GetAll(domainID *int) ([]models.Check, error) {
 	var err error
 
 	if domainID != nil {
-		rows, err = r.db.Query("SELECT id, domain_id, type, frequency, path, interval_seconds, params, enabled, realtime_mode, rate_limit_per_minute FROM checks WHERE domain_id = ?", *domainID)
+		rows, err = r.db.Query("SELECT id, domain_id, type, path, interval_seconds, params, enabled, realtime_mode, rate_limit_per_minute FROM checks WHERE domain_id = ?", *domainID)
 	} else {
-		rows, err = r.db.Query("SELECT id, domain_id, type, frequency, path, interval_seconds, params, enabled, realtime_mode, rate_limit_per_minute FROM checks")
+		rows, err = r.db.Query("SELECT id, domain_id, type, path, interval_seconds, params, enabled, realtime_mode, rate_limit_per_minute FROM checks")
 	}
 	if err != nil {
 		return nil, err
@@ -115,7 +113,7 @@ func (r *CheckRepo) GetAll(domainID *int) ([]models.Check, error) {
 			realtimeInt      int
 			rateLimitPerMin  int
 		)
-		if err := rows.Scan(&c.ID, &c.DomainID, &c.Type, &c.Frequency, &c.Path, &c.IntervalSeconds, &paramsJSON, &enabledInt, &realtimeInt, &rateLimitPerMin); err != nil {
+		if err := rows.Scan(&c.ID, &c.DomainID, &c.Type, &c.Path, &c.IntervalSeconds, &paramsJSON, &enabledInt, &realtimeInt, &rateLimitPerMin); err != nil {
 			return nil, err
 		}
 		c.Params = parseParams(paramsJSON)
@@ -131,7 +129,7 @@ func (r *CheckRepo) GetAll(domainID *int) ([]models.Check, error) {
 }
 
 func (r *CheckRepo) GetByID(id int) (models.Check, error) {
-	row := r.db.QueryRow("SELECT id, domain_id, type, frequency, path, interval_seconds, params, enabled, realtime_mode, rate_limit_per_minute FROM checks WHERE id = ?", id)
+	row := r.db.QueryRow("SELECT id, domain_id, type, path, interval_seconds, params, enabled, realtime_mode, rate_limit_per_minute FROM checks WHERE id = ?", id)
 	var (
 		c                models.Check
 		paramsJSON       string
@@ -139,7 +137,7 @@ func (r *CheckRepo) GetByID(id int) (models.Check, error) {
 		realtimeInt      int
 		rateLimitPerMin  int
 	)
-	err := row.Scan(&c.ID, &c.DomainID, &c.Type, &c.Frequency, &c.Path, &c.IntervalSeconds, &paramsJSON, &enabledInt, &realtimeInt, &rateLimitPerMin)
+	err := row.Scan(&c.ID, &c.DomainID, &c.Type, &c.Path, &c.IntervalSeconds, &paramsJSON, &enabledInt, &realtimeInt, &rateLimitPerMin)
 	if err != nil {
 		return models.Check{}, err
 	}
@@ -163,7 +161,6 @@ func (r *CheckRepo) UpdateWithRealtime(id int, checkType string, intervalSeconds
 		return models.Check{}, fmt.Errorf("marshal params: %w", err)
 	}
 
-	frequency := fmt.Sprintf("%ds", intervalSeconds)
 	path := params.Path
 	realtimeInt := 0
 	if realtimeMode {
@@ -171,8 +168,8 @@ func (r *CheckRepo) UpdateWithRealtime(id int, checkType string, intervalSeconds
 	}
 
 	_, err = r.db.Exec(
-		"UPDATE checks SET type = ?, frequency = ?, path = ?, interval_seconds = ?, params = ?, realtime_mode = ?, rate_limit_per_minute = ? WHERE id = ?",
-		checkType, frequency, path, intervalSeconds, string(paramsJSON), realtimeInt, rateLimitPerMinute, id,
+		"UPDATE checks SET type = ?, path = ?, interval_seconds = ?, params = ?, realtime_mode = ?, rate_limit_per_minute = ? WHERE id = ?",
+		checkType, path, intervalSeconds, string(paramsJSON), realtimeInt, rateLimitPerMinute, id,
 	)
 	if err != nil {
 		return models.Check{}, err

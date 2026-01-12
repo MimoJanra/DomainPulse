@@ -3,7 +3,6 @@ package storage
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -34,28 +33,16 @@ func InitDB() (*sql.DB, error) {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		domain_id INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
 		type TEXT NOT NULL,
-		frequency TEXT NOT NULL,
-		path TEXT NOT NULL
+		path TEXT NOT NULL,
+		interval_seconds INTEGER NOT NULL DEFAULT 60,
+		params TEXT NOT NULL DEFAULT '{}',
+		enabled INTEGER NOT NULL DEFAULT 1,
+		realtime_mode INTEGER NOT NULL DEFAULT 0,
+		rate_limit_per_minute INTEGER NOT NULL DEFAULT 0
 	);
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("error creating checks table: %w", err)
-	}
-
-	if err := addColumnIfMissing(db, "checks", "interval_seconds", "INTEGER NOT NULL DEFAULT 60"); err != nil {
-		return nil, fmt.Errorf("error ensuring interval_seconds column: %w", err)
-	}
-	if err := addColumnIfMissing(db, "checks", "params", "TEXT NOT NULL DEFAULT '{}'"); err != nil {
-		return nil, fmt.Errorf("error ensuring params column: %w", err)
-	}
-	if err := addColumnIfMissing(db, "checks", "enabled", "INTEGER NOT NULL DEFAULT 1"); err != nil {
-		return nil, fmt.Errorf("error ensuring enabled column: %w", err)
-	}
-	if err := addColumnIfMissing(db, "checks", "realtime_mode", "INTEGER NOT NULL DEFAULT 0"); err != nil {
-		return nil, fmt.Errorf("error ensuring realtime_mode column: %w", err)
-	}
-	if err := addColumnIfMissing(db, "checks", "rate_limit_per_minute", "INTEGER NOT NULL DEFAULT 0"); err != nil {
-		return nil, fmt.Errorf("error ensuring rate_limit_per_minute column: %w", err)
 	}
 
 	_, err = db.Exec(`
@@ -74,20 +61,5 @@ func InitDB() (*sql.DB, error) {
 		return nil, fmt.Errorf("error creating results table: %w", err)
 	}
 
-	if err := addColumnIfMissing(db, "results", "status", "TEXT NOT NULL DEFAULT 'success'"); err != nil {
-		return nil, fmt.Errorf("error ensuring status column: %w", err)
-	}
-	if err := addColumnIfMissing(db, "results", "error_message", "TEXT"); err != nil {
-		return nil, fmt.Errorf("error ensuring error_message column: %w", err)
-	}
-
 	return db, nil
-}
-
-func addColumnIfMissing(db *sql.DB, table, column, definition string) error {
-	_, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, definition))
-	if err != nil && !strings.Contains(err.Error(), "duplicate column name") {
-		return err
-	}
-	return nil
 }

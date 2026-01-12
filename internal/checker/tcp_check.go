@@ -2,14 +2,16 @@ package checker
 
 import (
 	"fmt"
+	"log"
 	"net"
+	"strconv"
 	"time"
 )
 
 func RunTCPCheck(host string, port int, timeout time.Duration) CheckResult {
 	start := time.Now()
 
-	address := net.JoinHostPort(host, fmt.Sprintf("%d", port))
+	address := net.JoinHostPort(host, strconv.Itoa(port))
 
 	conn, err := net.DialTimeout("tcp", address, timeout)
 	duration := time.Since(start).Milliseconds()
@@ -30,7 +32,7 @@ func RunTCPCheck(host string, port int, timeout time.Duration) CheckResult {
 	}
 
 	if err := conn.Close(); err != nil {
-		fmt.Printf("failed to close TCP connection: %v", err)
+		log.Printf("failed to close TCP connection: %v", err)
 	}
 
 	return CheckResult{
