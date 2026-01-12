@@ -55,6 +55,5 @@ func InitDB() (*sql.DB, error) {
 		return nil, fmt.Errorf("error creating results table: %w", err)
 	}
 
-	fmt.Println("SQLite database initialized successfully.")
 	return db, nil
 }
