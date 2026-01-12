@@ -34,3 +34,42 @@ type Result struct {
 	ErrorMessage string `json:"error_message,omitempty" example:""`
 	CreatedAt    string `json:"created_at" example:"2024-01-01T12:00:00Z"`
 }
+
+type ResultsResponse struct {
+	Results    []Result `json:"results"`
+	Total      int      `json:"total"`
+	Page       int      `json:"page"`
+	PageSize   int      `json:"page_size"`
+	TotalPages int      `json:"total_pages"`
+}
+
+type LatencyStats struct {
+	Min    int     `json:"min" example:"50"`
+	Max    int     `json:"max" example:"500"`
+	Avg    float64 `json:"avg" example:"150.5"`
+	Median float64 `json:"median" example:"145.0"`
+	P95    float64 `json:"p95" example:"300.0"`
+	P99    float64 `json:"p99" example:"450.0"`
+}
+
+type StatsResponse struct {
+	TotalResults       int            `json:"total_results" example:"1000"`
+	StatusDistribution map[string]int `json:"status_distribution" example:"{\"success\":950,\"failure\":50}"`
+	LatencyStats       LatencyStats   `json:"latency_stats"`
+}
+
+type TimeIntervalData struct {
+	Timestamp          string         `json:"timestamp" example:"2024-01-01 12:00:00"`
+	Count              int            `json:"count" example:"60"`
+	SuccessCount       int            `json:"success_count" example:"58"`
+	FailureCount       int            `json:"failure_count" example:"2"`
+	AvgLatency         float64        `json:"avg_latency" example:"150.5"`
+	MinLatency         int            `json:"min_latency" example:"50"`
+	MaxLatency         int            `json:"max_latency" example:"500"`
+	StatusDistribution map[string]int `json:"status_distribution" example:"{\"success\":58,\"failure\":2}"`
+}
+
+type TimeIntervalResponse struct {
+	Interval string             `json:"interval" example:"1m"`
+	Data     []TimeIntervalData `json:"data"`
+}

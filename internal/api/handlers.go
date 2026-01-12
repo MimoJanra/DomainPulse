@@ -342,12 +342,16 @@ func (s *Server) GetResults(w http.ResponseWriter, _ *http.Request) {
 
 // GetResultsByCheckID godoc
 // @Summary Получить результаты проверки
-// @Description Возвращает список результатов для конкретной проверки
+// @Description Возвращает список результатов для конкретной проверки с фильтрацией по периоду и пагинацией
 // @Tags results
 // @Produce json
 // @Param id path int true "ID проверки"
-// @Success 200 {array} models.Result
-// @Failure 400 {string} string "invalid check id"
+// @Param from query string false "Начало периода" example:"2024-01-01T00:00:00Z"
+// @Param to query string false "Конец периода" example:"2024-01-31T23:59:59Z"
+// @Param page query int false "Номер страницы" default:"1"
+// @Param page_size query int false "Размер страницы" default:"50"
+// @Success 200 {object} models.ResultsResponse
+// @Failure 400 {string} string "invalid check id or parameters"
 // @Router /checks/{id}/results [get]
 func (s *Server) GetResultsByCheckID(w http.ResponseWriter, r *http.Request) {
 	checkIDStr := chi.URLParam(r, "id")
@@ -357,12 +361,199 @@ func (s *Server) GetResultsByCheckID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := s.ResultRepo.GetByCheckID(checkID)
+	_, err = s.CheckRepo.GetByID(checkID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "check not found")
+		return
+	}
+
+	var from, to *time.Time
+	fromStr := r.URL.Query().Get("from")
+	if fromStr != "" {
+		parsed, err := time.Parse(time.RFC3339, fromStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid from parameter, use RFC3339 format")
+			return
+		}
+		from = &parsed
+	}
+
+	toStr := r.URL.Query().Get("to")
+	if toStr != "" {
+		parsed, err := time.Parse(time.RFC3339, toStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid to parameter, use RFC3339 format")
+			return
+		}
+		to = &parsed
+	}
+
+	page := 1
+	pageSize := 50
+	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+	if pageSizeStr := r.URL.Query().Get("page_size"); pageSizeStr != "" {
+		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 {
+			pageSize = ps
+		}
+	}
+
+	results, total, err := s.ResultRepo.GetByCheckIDWithPagination(checkID, from, to, page, pageSize)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to get results")
 		return
 	}
-	writeJSON(w, http.StatusOK, results)
+
+	totalPages := (total + pageSize - 1) / pageSize
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	response := models.ResultsResponse{
+		Results:    results,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+// GetCheckStats godoc
+// @Summary Получить статистику проверки
+// @Description Возвращает агрегированную статистику: распределение по статусам и статистику latency
+// @Tags results
+// @Produce json
+// @Param id path int true "ID проверки"
+// @Param from query string false "Начало периода" example:"2024-01-01T00:00:00Z"
+// @Param to query string false "Конец периода" example:"2024-01-31T23:59:59Z"
+// @Success 200 {object} models.StatsResponse
+// @Failure 400 {string} string "invalid check id or parameters"
+// @Failure 404 {string} string "check not found"
+// @Router /checks/{id}/stats [get]
+func (s *Server) GetCheckStats(w http.ResponseWriter, r *http.Request) {
+	checkIDStr := chi.URLParam(r, "id")
+	checkID, err := strconv.Atoi(checkIDStr)
+	if err != nil || checkID <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid check id")
+		return
+	}
+
+	_, err = s.CheckRepo.GetByID(checkID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "check not found")
+		return
+	}
+
+	var from, to *time.Time
+	fromStr := r.URL.Query().Get("from")
+	if fromStr != "" {
+		parsed, err := time.Parse(time.RFC3339, fromStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid from parameter, use RFC3339 format")
+			return
+		}
+		from = &parsed
+	}
+
+	toStr := r.URL.Query().Get("to")
+	if toStr != "" {
+		parsed, err := time.Parse(time.RFC3339, toStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid to parameter, use RFC3339 format")
+			return
+		}
+		to = &parsed
+	}
+
+	stats, err := s.ResultRepo.GetStats(checkID, from, to)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get stats")
+		return
+	}
+
+	response := models.StatsResponse{
+		TotalResults:       stats.TotalResults,
+		StatusDistribution: stats.StatusDistribution,
+		LatencyStats:       stats.LatencyStats,
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+// GetCheckTimeIntervalData godoc
+// @Summary Получить агрегированные данные по тайм-интервалам
+// @Description Возвращает данные, агрегированные по тайм-интервалам (1m, 5m, 1h) для построения графиков
+// @Tags results
+// @Produce json
+// @Param id path int true "ID проверки"
+// @Param interval query string true "Интервал агрегации" Enums(1m, 5m, 1h) default:"1m"
+// @Param from query string false "Начало периода" example:"2024-01-01T00:00:00Z"
+// @Param to query string false "Конец периода" example:"2024-01-31T23:59:59Z"
+// @Success 200 {object} models.TimeIntervalResponse
+// @Failure 400 {string} string "invalid check id, interval or parameters"
+// @Failure 404 {string} string "check not found"
+// @Router /checks/{id}/intervals [get]
+func (s *Server) GetCheckTimeIntervalData(w http.ResponseWriter, r *http.Request) {
+	checkIDStr := chi.URLParam(r, "id")
+	checkID, err := strconv.Atoi(checkIDStr)
+	if err != nil || checkID <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid check id")
+		return
+	}
+
+	_, err = s.CheckRepo.GetByID(checkID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "check not found")
+		return
+	}
+
+	interval := r.URL.Query().Get("interval")
+	if interval == "" {
+		interval = "1m"
+	}
+	if interval != "1m" && interval != "5m" && interval != "1h" {
+		writeError(w, http.StatusBadRequest, "invalid interval. Supported: 1m, 5m, 1h")
+		return
+	}
+
+	var from, to *time.Time
+	fromStr := r.URL.Query().Get("from")
+	if fromStr != "" {
+		parsed, err := time.Parse(time.RFC3339, fromStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid from parameter, use RFC3339 format")
+			return
+		}
+		from = &parsed
+	}
+
+	toStr := r.URL.Query().Get("to")
+	if toStr != "" {
+		parsed, err := time.Parse(time.RFC3339, toStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid to parameter, use RFC3339 format")
+			return
+		}
+		to = &parsed
+	}
+
+	data, err := s.ResultRepo.GetByTimeInterval(checkID, interval, from, to)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get interval data: "+err.Error())
+		return
+	}
+
+	response := models.TimeIntervalResponse{
+		Interval: interval,
+		Data:     data,
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
 
 // CreateCheckDirect godoc

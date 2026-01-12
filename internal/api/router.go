@@ -36,6 +36,12 @@ func SetupRouter(s *Server) http.Handler {
 	r.Get("/checks/{id}/results", func(w http.ResponseWriter, r *http.Request) {
 		s.GetResultsByCheckID(w, r)
 	})
+	r.Get("/checks/{id}/stats", func(w http.ResponseWriter, r *http.Request) {
+		s.GetCheckStats(w, r)
+	})
+	r.Get("/checks/{id}/intervals", func(w http.ResponseWriter, r *http.Request) {
+		s.GetCheckTimeIntervalData(w, r)
+	})
 
 	r.Get("/checks", s.GetChecks)
 	r.Post("/checks", s.CreateCheckDirect)
