@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 
@@ -10,6 +9,21 @@ import (
 	"github.com/MimoJanra/DomainPulse/internal/storage"
 )
 
+// @title           DomainPulse API
+// @version         1.0
+// @description     REST API для мониторинга доменов и HTTP-проверок.
+// @termsOfService  http://swagger.io/terms/
+
+// @contact.name   API Support
+// @contact.url    http://www.swagger.io/support
+// @contact.email  support@swagger.io
+
+// @license.name  Apache 2.0
+// @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host      localhost:8080
+// @BasePath  /
+// @schemes   http
 func main() {
 	db, err := storage.InitDB()
 	if err != nil {
@@ -33,7 +47,7 @@ func main() {
 
 	r := api.SetupRouter(server)
 
-	fmt.Println("Server started on :8080")
+	log.Println("Server started on :8080")
 	if err := http.ListenAndServe(":8080", r); err != nil {
 		log.Fatal(err)
 	}

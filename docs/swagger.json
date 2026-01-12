@@ -1,0 +1,268 @@
+{
+    "schemes": [
+        "http"
+    ],
+    "swagger": "2.0",
+    "info": {
+        "description": "REST API для мониторинга доменов и HTTP-проверок.",
+        "title": "DomainPulse API",
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "name": "API Support",
+            "url": "http://www.swagger.io/support",
+            "email": "support@swagger.io"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+        },
+        "version": "1.0"
+    },
+    "host": "localhost:8080",
+    "basePath": "/",
+    "paths": {
+        "/domains": {
+            "get": {
+                "description": "Возвращает список всех доменов в системе",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "domains"
+                ],
+                "summary": "Получить список доменов",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.Domain"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Добавляет домен для мониторинга",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "domains"
+                ],
+                "summary": "Добавить новый домен",
+                "parameters": [
+                    {
+                        "description": "Данные домена",
+                        "name": "domain",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.Domain"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request body",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/domains/{id}": {
+            "delete": {
+                "description": "Удаляет домен по ID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "domains"
+                ],
+                "summary": "Удалить домен",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID домена",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "integer"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "domain not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/domains/{id}/checks": {
+            "get": {
+                "description": "Возвращает список всех проверок, связанных с доменом",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "checks"
+                ],
+                "summary": "Получить проверки для домена",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID домена",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.Check"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "invalid domain id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Добавляет новую HTTP-проверку для домена",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "checks"
+                ],
+                "summary": "Добавить проверку для домена",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID домена",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Параметры проверки",
+                        "name": "check",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.Check"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request body",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/run-check": {
+            "post": {
+                "description": "Выполняет все проверки и записывает результаты в БД",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "checks"
+                ],
+                "summary": "Запустить все проверки вручную",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "models.Check": {
+            "type": "object",
+            "properties": {
+                "domain_id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "frequency": {
+                    "type": "string",
+                    "example": "5m"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "path": {
+                    "type": "string",
+                    "example": "/"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "http"
+                }
+            }
+        },
+        "models.Domain": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "type": "string",
+                    "example": "example.com"
+                }
+            }
+        }
+    }
+}

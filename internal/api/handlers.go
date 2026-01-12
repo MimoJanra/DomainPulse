@@ -3,7 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -61,6 +61,13 @@ func validateDomain(raw string) (string, error) {
 	return host, nil
 }
 
+// GetDomains godoc
+// @Summary Получить список доменов
+// @Description Возвращает список всех доменов в системе
+// @Tags domains
+// @Produce json
+// @Success 200 {array} models.Domain
+// @Router /domains [get]
 func (s *Server) GetDomains(w http.ResponseWriter, _ *http.Request) {
 	domains, err := s.DomainRepo.GetAll()
 	if err != nil {
@@ -70,6 +77,16 @@ func (s *Server) GetDomains(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, domains)
 }
 
+// CreateDomain godoc
+// @Summary Добавить новый домен
+// @Description Добавляет домен для мониторинга
+// @Tags domains
+// @Accept json
+// @Produce json
+// @Param domain body object true "Данные домена" example({"name": "example.com"})
+// @Success 201 {object} models.Domain
+// @Failure 400 {string} string "invalid request body"
+// @Router /domains [post]
 func (s *Server) CreateDomain(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name string `json:"name"`
@@ -94,6 +111,15 @@ func (s *Server) CreateDomain(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, domain)
 }
 
+// DeleteDomainByID godoc
+// @Summary Удалить домен
+// @Description Удаляет домен по ID
+// @Tags domains
+// @Param id path int true "ID домена"
+// @Produce json
+// @Success 200 {object} map[string]int
+// @Failure 404 {string} string "domain not found"
+// @Router /domains/{id} [delete]
 func (s *Server) DeleteDomainByID(w http.ResponseWriter, _ *http.Request, id int) {
 	ok, err := s.DomainRepo.DeleteByID(id)
 	if err != nil {
@@ -107,6 +133,15 @@ func (s *Server) DeleteDomainByID(w http.ResponseWriter, _ *http.Request, id int
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": id})
 }
 
+// GetCheck godoc
+// @Summary Получить проверки для домена
+// @Description Возвращает список всех проверок, связанных с доменом
+// @Tags checks
+// @Produce json
+// @Param id path int true "ID домена"
+// @Success 200 {array} models.Check
+// @Failure 400 {string} string "invalid domain id"
+// @Router /domains/{id}/checks [get]
 func (s *Server) GetCheck(w http.ResponseWriter, r *http.Request) {
 	domainIDStr := chi.URLParam(r, "id")
 	domainID, err := strconv.Atoi(domainIDStr)
@@ -123,6 +158,17 @@ func (s *Server) GetCheck(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, checks)
 }
 
+// CreateCheck godoc
+// @Summary Добавить проверку для домена
+// @Description Добавляет новую HTTP-проверку для домена
+// @Tags checks
+// @Accept json
+// @Produce json
+// @Param id path int true "ID домена"
+// @Param check body object true "Параметры проверки" example({"type": "http", "frequency": "5m", "path": "/"})
+// @Success 201 {object} models.Check
+// @Failure 400 {string} string "invalid request body"
+// @Router /domains/{id}/checks [post]
 func (s *Server) CreateCheck(w http.ResponseWriter, r *http.Request) {
 	domainIDStr := chi.URLParam(r, "id")
 	domainID, err := strconv.Atoi(domainIDStr)
@@ -156,6 +202,13 @@ func (s *Server) CreateCheck(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, check)
 }
 
+// RunChecks godoc
+// @Summary Запустить все проверки вручную
+// @Description Выполняет все проверки и записывает результаты в БД
+// @Tags checks
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router /run-check [post]
 func (s *Server) RunChecks(w http.ResponseWriter, _ *http.Request) {
 	checks, err := s.CheckRepo.GetAll()
 	if err != nil {
@@ -168,7 +221,7 @@ func (s *Server) RunChecks(w http.ResponseWriter, _ *http.Request) {
 	for _, check := range checks {
 		domain, err := s.DomainRepo.GetByID(check.DomainID)
 		if err != nil {
-			fmt.Printf("domain not found for check %d\n", check.ID)
+			log.Printf("domain not found for check %d", check.ID)
 			continue
 		}
 
@@ -189,7 +242,7 @@ func (s *Server) RunChecks(w http.ResponseWriter, _ *http.Request) {
 		}
 
 		if err := s.ResultRepo.Add(res); err != nil {
-			fmt.Printf("failed to save result for check %d: %v\n", check.ID, err)
+			log.Printf("failed to save result for check %d: %v", check.ID, err)
 			continue
 		}
 
