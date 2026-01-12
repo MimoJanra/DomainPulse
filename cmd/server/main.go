@@ -6,8 +6,8 @@ import (
 	"log"
 	"net/http"
 
-	"DomainPulse/internal/api"
-	"DomainPulse/internal/storage"
+	"github.com/MimoJanra/DomainPulse/internal/api"
+	"github.com/MimoJanra/DomainPulse/internal/storage"
 )
 
 func main() {
