@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 	"strings"
@@ -17,11 +18,42 @@ type CheckResult struct {
 
 type HTTPResult = CheckResult
 
-func RunHTTPCheck(url string, timeout time.Duration) CheckResult {
+func RunHTTPCheckWithMethod(url string, method string, body string, timeout time.Duration) CheckResult {
 	client := http.Client{Timeout: timeout}
 
+	var req *http.Request
+	var err error
+
 	start := time.Now()
-	resp, err := client.Get(url)
+
+	if method == "" {
+		method = "GET"
+	}
+
+	if body != "" && (method == "POST" || method == "PUT" || method == "PATCH") {
+		req, err = http.NewRequest(method, url, bytes.NewBufferString(body))
+		if err != nil {
+			return CheckResult{
+				Status:       "error",
+				DurationMS:   0,
+				Outcome:      "error",
+				ErrorMessage: err.Error(),
+			}
+		}
+		req.Header.Set("Content-Type", "application/json")
+	} else {
+		req, err = http.NewRequest(method, url, nil)
+		if err != nil {
+			return CheckResult{
+				Status:       "error",
+				DurationMS:   0,
+				Outcome:      "error",
+				ErrorMessage: err.Error(),
+			}
+		}
+	}
+
+	resp, err := client.Do(req)
 	duration := time.Since(start).Milliseconds()
 
 	if err != nil {
@@ -40,8 +72,10 @@ func RunHTTPCheck(url string, timeout time.Duration) CheckResult {
 		}
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
+		if Body != nil {
+			err := Body.Close()
+			if err != nil {
+			}
 		}
 	}(resp.Body)
 
@@ -69,8 +103,8 @@ func isTimeoutError(err error) bool {
 		return false
 	}
 	errStr := err.Error()
-	return strings.Contains(errStr, "timeout") || 
-		strings.Contains(errStr, "deadline exceeded") || 
+	return strings.Contains(errStr, "timeout") ||
+		strings.Contains(errStr, "deadline exceeded") ||
 		strings.Contains(errStr, "i/o timeout") ||
 		strings.Contains(errStr, "context deadline exceeded")
 }

@@ -13,7 +13,6 @@ import (
 func SetupRouter(s *Server) http.Handler {
 	r := chi.NewRouter()
 
-	// Статические файлы для веб-интерфейса
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "web/index.html")
 	})

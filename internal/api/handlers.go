@@ -272,12 +272,20 @@ func (s *Server) RunChecks(w http.ResponseWriter, _ *http.Request) {
 			if path == "" {
 				path = "/"
 			}
-			fullURL := "https://" + domain.Name
+			scheme := check.Params.Scheme
+			if scheme == "" {
+				scheme = "https"
+			}
+			method := check.Params.Method
+			if method == "" {
+				method = "GET"
+			}
+			fullURL := scheme + "://" + domain.Name
 			if !strings.HasPrefix(path, "/") {
 				fullURL += "/"
 			}
 			fullURL += path
-			resData = checker.RunHTTPCheck(fullURL, timeout)
+			resData = checker.RunHTTPCheckWithMethod(fullURL, method, check.Params.Body, timeout)
 		case "icmp":
 			resData = checker.RunICMPCheck(domain.Name, timeout)
 		case "tcp":
@@ -286,7 +294,7 @@ func (s *Server) RunChecks(w http.ResponseWriter, _ *http.Request) {
 				log.Printf("invalid port for TCP check %d", check.ID)
 				continue
 			}
-			resData = checker.RunTCPCheck(domain.Name, port, timeout)
+			resData = checker.RunTCPCheckWithPayload(domain.Name, port, check.Params.Payload, timeout)
 		case "udp":
 			port := check.Params.Port
 			if port <= 0 {

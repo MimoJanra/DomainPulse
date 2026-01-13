@@ -10,6 +10,9 @@ type CheckParams struct {
 	Port      int    `json:"port,omitempty" example:"80"`
 	Payload   string `json:"payload,omitempty" example:"ping"`
 	TimeoutMS int    `json:"timeout_ms,omitempty" example:"5000"`
+	Scheme    string `json:"scheme,omitempty" example:"https"`
+	Method    string `json:"method,omitempty" example:"GET"`
+	Body      string `json:"body,omitempty" example:""`
 }
 
 type Check struct {

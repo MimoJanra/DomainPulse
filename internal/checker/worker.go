@@ -10,23 +10,23 @@ import (
 )
 
 type WorkerPool struct {
-	workers        int
-	jobQueue       chan CheckJob
-	wg             sync.WaitGroup
-	stopChan       chan struct{}
-	domainRepo     *storage.SQLiteDomainRepo
-	resultRepo     *storage.ResultRepo
-	checkMetrics   map[int]*CheckMetrics
-	metricsMu      sync.RWMutex
+	workers      int
+	jobQueue     chan CheckJob
+	wg           sync.WaitGroup
+	stopChan     chan struct{}
+	domainRepo   *storage.SQLiteDomainRepo
+	resultRepo   *storage.ResultRepo
+	checkMetrics map[int]*CheckMetrics
+	metricsMu    sync.RWMutex
 }
 
 type CheckMetrics struct {
-	mu                sync.Mutex
-	errorCount        int           
-	lastErrorTime     time.Time     
-	averageDuration   time.Duration 
-	sampleCount       int           
-	lastCheckTime     time.Time     
+	mu              sync.Mutex
+	errorCount      int
+	lastErrorTime   time.Time
+	averageDuration time.Duration
+	sampleCount     int
+	lastCheckTime   time.Time
 }
 
 type CheckJob struct {
@@ -115,12 +115,20 @@ func (wp *WorkerPool) executeCheck(job CheckJob) {
 		if path == "" {
 			path = "/"
 		}
-		fullURL := "https://" + job.Domain.Name
+		scheme := job.Check.Params.Scheme
+		if scheme == "" {
+			scheme = "https"
+		}
+		method := job.Check.Params.Method
+		if method == "" {
+			method = "GET"
+		}
+		fullURL := scheme + "://" + job.Domain.Name
 		if len(path) > 0 && path[0] != '/' {
 			fullURL += "/"
 		}
 		fullURL += path
-		result = RunHTTPCheck(fullURL, timeout)
+		result = RunHTTPCheckWithMethod(fullURL, method, job.Check.Params.Body, timeout)
 
 	case "icmp":
 		result = RunICMPCheck(job.Domain.Name, timeout)
@@ -131,7 +139,7 @@ func (wp *WorkerPool) executeCheck(job CheckJob) {
 			log.Printf("invalid port for TCP check %d", job.Check.ID)
 			return
 		}
-		result = RunTCPCheck(job.Domain.Name, port, timeout)
+		result = RunTCPCheckWithPayload(job.Domain.Name, port, job.Check.Params.Payload, timeout)
 
 	case "udp":
 		port := job.Check.Params.Port
@@ -192,14 +200,14 @@ func (wp *WorkerPool) updateMetrics(checkID int, duration time.Duration, isError
 		metrics.sampleCount++
 		metrics.averageDuration = (metrics.averageDuration*time.Duration(metrics.sampleCount-1) + duration) / time.Duration(metrics.sampleCount)
 	} else {
-		alpha := 0.2 
+		alpha := 0.2
 		metrics.averageDuration = time.Duration(float64(metrics.averageDuration)*(1-alpha) + float64(duration)*alpha)
 	}
 
 	metrics.lastCheckTime = now
 
 	if metrics.errorCount >= 5 || metrics.averageDuration > 5*time.Second {
-		log.Printf("Check %d: overload detected (errors: %d, avg duration: %v). Consider reducing interval.", 
+		log.Printf("Check %d: overload detected (errors: %d, avg duration: %v). Consider reducing interval.",
 			checkID, metrics.errorCount, metrics.averageDuration)
 	}
 }

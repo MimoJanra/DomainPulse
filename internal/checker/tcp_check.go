@@ -9,6 +9,10 @@ import (
 )
 
 func RunTCPCheck(host string, port int, timeout time.Duration) CheckResult {
+	return RunTCPCheckWithPayload(host, port, "", timeout)
+}
+
+func RunTCPCheckWithPayload(host string, port int, payload string, timeout time.Duration) CheckResult {
 	start := time.Now()
 
 	address := net.JoinHostPort(host, strconv.Itoa(port))
@@ -28,6 +32,18 @@ func RunTCPCheck(host string, port int, timeout time.Duration) CheckResult {
 			DurationMS:   int(duration),
 			Outcome:      outcome,
 			ErrorMessage: fmt.Sprintf("TCP connection failed: %v", err),
+		}
+	}
+
+	if payload != "" {
+		if _, err := conn.Write([]byte(payload)); err != nil {
+			conn.Close()
+			return CheckResult{
+				Status:       "error",
+				DurationMS:   int(duration),
+				Outcome:      "error",
+				ErrorMessage: fmt.Sprintf("TCP write failed: %v", err),
+			}
 		}
 	}
 
