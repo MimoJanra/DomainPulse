@@ -20,81 +20,100 @@ type HTTPResult = CheckResult
 
 func RunHTTPCheckWithMethod(url string, method string, body string, timeout time.Duration) CheckResult {
 	client := http.Client{Timeout: timeout}
-
-	var req *http.Request
-	var err error
-
 	start := time.Now()
 
-	if method == "" {
-		method = "GET"
-	}
-
-	if body != "" && (method == "POST" || method == "PUT" || method == "PATCH") {
-		req, err = http.NewRequest(method, url, bytes.NewBufferString(body))
-		if err != nil {
-			return CheckResult{
-				Status:       "error",
-				DurationMS:   0,
-				Outcome:      "error",
-				ErrorMessage: err.Error(),
-			}
-		}
-		req.Header.Set("Content-Type", "application/json")
-	} else {
-		req, err = http.NewRequest(method, url, nil)
-		if err != nil {
-			return CheckResult{
-				Status:       "error",
-				DurationMS:   0,
-				Outcome:      "error",
-				ErrorMessage: err.Error(),
-			}
-		}
+	method = normalizeMethod(method)
+	req, err := createHTTPRequest(method, url, body)
+	if err != nil {
+		return createErrorResult(err.Error())
 	}
 
 	resp, err := client.Do(req)
 	duration := time.Since(start).Milliseconds()
 
 	if err != nil {
-		errorMsg := err.Error()
-		status := "timeout"
-		outcome := "timeout"
-		if !isTimeoutError(err) {
-			status = "error"
-			outcome = "error"
-		}
-		return CheckResult{
-			Status:       status,
-			DurationMS:   int(duration),
-			Outcome:      outcome,
-			ErrorMessage: errorMsg,
-		}
-	}
-	defer func(Body io.ReadCloser) {
-		if Body != nil {
-			err := Body.Close()
-			if err != nil {
-			}
-		}
-	}(resp.Body)
-
-	status := "success"
-	outcome := "2xx"
-	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-		status = "failure"
-		outcome = "4xx"
-	} else if resp.StatusCode >= 500 {
-		status = "failure"
-		outcome = "5xx"
+		return handleRequestError(err, int(duration))
 	}
 
+	defer closeResponseBody(resp.Body)
+	return createSuccessResult(resp, int(duration))
+}
+
+func normalizeMethod(method string) string {
+	if method == "" {
+		return "GET"
+	}
+	return method
+}
+
+func createHTTPRequest(method, url, body string) (*http.Request, error) {
+	if hasRequestBody(method, body) {
+		req, err := http.NewRequest(method, url, bytes.NewBufferString(body))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		return req, nil
+	}
+
+	return http.NewRequest(method, url, nil)
+}
+
+func hasRequestBody(method, body string) bool {
+	return body != "" && (method == "POST" || method == "PUT" || method == "PATCH")
+}
+
+func createErrorResult(errorMsg string) CheckResult {
+	return CheckResult{
+		Status:       "error",
+		DurationMS:   0,
+		Outcome:      "error",
+		ErrorMessage: errorMsg,
+	}
+}
+
+func handleRequestError(err error, duration int) CheckResult {
+	status, outcome := determineErrorStatus(err)
+	return CheckResult{
+		Status:       status,
+		DurationMS:   duration,
+		Outcome:      outcome,
+		ErrorMessage: err.Error(),
+	}
+}
+
+func determineErrorStatus(err error) (status, outcome string) {
+	if isTimeoutError(err) {
+		return "timeout", "timeout"
+	}
+	return "error", "error"
+}
+
+func closeResponseBody(body io.ReadCloser) {
+	if body != nil {
+		_ = body.Close()
+	}
+}
+
+func createSuccessResult(resp *http.Response, duration int) CheckResult {
+	status, outcome := determineResponseStatus(resp.StatusCode)
 	return CheckResult{
 		Status:       status,
 		StatusCode:   resp.StatusCode,
-		DurationMS:   int(duration),
+		DurationMS:   duration,
 		Outcome:      outcome,
 		ErrorMessage: "",
+	}
+}
+
+func determineResponseStatus(statusCode int) (status, outcome string) {
+	switch {
+	case statusCode >= 500:
+		return "failure", "5xx"
+	case statusCode >= 400:
+		return "failure", "4xx"
+	default:
+		return "success", "2xx"
 	}
 }
 

@@ -8,10 +8,6 @@ import (
 	"time"
 )
 
-func RunTCPCheck(host string, port int, timeout time.Duration) CheckResult {
-	return RunTCPCheckWithPayload(host, port, "", timeout)
-}
-
 func RunTCPCheckWithPayload(host string, port int, payload string, timeout time.Duration) CheckResult {
 	start := time.Now()
 
@@ -37,7 +33,10 @@ func RunTCPCheckWithPayload(host string, port int, payload string, timeout time.
 
 	if payload != "" {
 		if _, err := conn.Write([]byte(payload)); err != nil {
-			conn.Close()
+			err := conn.Close()
+			if err != nil {
+				return CheckResult{}
+			}
 			return CheckResult{
 				Status:       "error",
 				DurationMS:   int(duration),

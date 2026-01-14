@@ -260,64 +260,12 @@ func (s *Server) RunChecks(w http.ResponseWriter, _ *http.Request) {
 			continue
 		}
 
-		var resData checker.CheckResult
-		timeout := 10 * time.Second
-		if check.Params.TimeoutMS > 0 {
-			timeout = time.Duration(check.Params.TimeoutMS) * time.Millisecond
-		}
-
-		switch check.Type {
-		case "http":
-			path := check.Params.Path
-			if path == "" {
-				path = "/"
-			}
-			scheme := check.Params.Scheme
-			if scheme == "" {
-				scheme = "https"
-			}
-			method := check.Params.Method
-			if method == "" {
-				method = "GET"
-			}
-			fullURL := scheme + "://" + domain.Name
-			if !strings.HasPrefix(path, "/") {
-				fullURL += "/"
-			}
-			fullURL += path
-			resData = checker.RunHTTPCheckWithMethod(fullURL, method, check.Params.Body, timeout)
-		case "icmp":
-			resData = checker.RunICMPCheck(domain.Name, timeout)
-		case "tcp":
-			port := check.Params.Port
-			if port <= 0 {
-				log.Printf("invalid port for TCP check %d", check.ID)
-				continue
-			}
-			resData = checker.RunTCPCheckWithPayload(domain.Name, port, check.Params.Payload, timeout)
-		case "udp":
-			port := check.Params.Port
-			if port <= 0 {
-				log.Printf("invalid port for UDP check %d", check.ID)
-				continue
-			}
-			payload := check.Params.Payload
-			resData = checker.RunUDPCheck(domain.Name, port, payload, timeout)
-		default:
-			log.Printf("check type %s not yet executable, skipping check %d", check.Type, check.ID)
+		resData := s.executeCheckForDomain(check, domain)
+		if resData == nil {
 			continue
 		}
 
-		res := models.Result{
-			CheckID:      check.ID,
-			Status:       resData.Status,
-			StatusCode:   resData.StatusCode,
-			DurationMS:   resData.DurationMS,
-			Outcome:      resData.Outcome,
-			ErrorMessage: resData.ErrorMessage,
-			CreatedAt:    time.Now().Format(time.RFC3339),
-		}
-
+		res := s.createResult(check, *resData)
 		if err := s.ResultRepo.Add(res); err != nil {
 			log.Printf("failed to save result for check %d: %v", check.ID, err)
 			continue
@@ -330,6 +278,97 @@ func (s *Server) RunChecks(w http.ResponseWriter, _ *http.Request) {
 		"count":   len(results),
 		"results": results,
 	})
+}
+
+func (s *Server) executeCheckForDomain(check models.Check, domain models.Domain) *checker.CheckResult {
+	timeout := s.getCheckTimeout(check)
+
+	switch check.Type {
+	case "http":
+		result := s.runHTTPCheckForDomain(domain, check, timeout)
+		return &result
+	case "icmp":
+		result := checker.RunICMPCheck(domain.Name, timeout)
+		return &result
+	case "tcp":
+		return s.runTCPCheckForDomain(domain, check, timeout)
+	case "udp":
+		return s.runUDPCheckForDomain(domain, check, timeout)
+	default:
+		log.Printf("check type %s not yet executable, skipping check %d", check.Type, check.ID)
+		return nil
+	}
+}
+
+func (s *Server) getCheckTimeout(check models.Check) time.Duration {
+	timeout := 10 * time.Second
+	if check.Params.TimeoutMS > 0 {
+		timeout = time.Duration(check.Params.TimeoutMS) * time.Millisecond
+	}
+	return timeout
+}
+
+func (s *Server) runHTTPCheckForDomain(domain models.Domain, check models.Check, timeout time.Duration) checker.CheckResult {
+	fullURL := s.buildHTTPURLForDomain(domain.Name, check.Params)
+	method := s.normalizeHTTPMethod(check.Params.Method)
+	return checker.RunHTTPCheckWithMethod(fullURL, method, check.Params.Body, timeout)
+}
+
+func (s *Server) buildHTTPURLForDomain(domainName string, params models.CheckParams) string {
+	path := params.Path
+	if path == "" {
+		path = "/"
+	}
+	scheme := params.Scheme
+	if scheme == "" {
+		scheme = "https"
+	}
+
+	fullURL := scheme + "://" + domainName
+	if !strings.HasPrefix(path, "/") {
+		fullURL += "/"
+	}
+	fullURL += path
+	return fullURL
+}
+
+func (s *Server) normalizeHTTPMethod(method string) string {
+	if method == "" {
+		return "GET"
+	}
+	return method
+}
+
+func (s *Server) runTCPCheckForDomain(domain models.Domain, check models.Check, timeout time.Duration) *checker.CheckResult {
+	port := check.Params.Port
+	if port <= 0 {
+		log.Printf("invalid port for TCP check %d", check.ID)
+		return nil
+	}
+	result := checker.RunTCPCheckWithPayload(domain.Name, port, check.Params.Payload, timeout)
+	return &result
+}
+
+func (s *Server) runUDPCheckForDomain(domain models.Domain, check models.Check, timeout time.Duration) *checker.CheckResult {
+	port := check.Params.Port
+	if port <= 0 {
+		log.Printf("invalid port for UDP check %d", check.ID)
+		return nil
+	}
+	result := checker.RunUDPCheck(domain.Name, port, check.Params.Payload, timeout)
+	return &result
+}
+
+func (s *Server) createResult(check models.Check, resData checker.CheckResult) models.Result {
+	return models.Result{
+		CheckID:      check.ID,
+		Status:       resData.Status,
+		StatusCode:   resData.StatusCode,
+		DurationMS:   resData.DurationMS,
+		Outcome:      resData.Outcome,
+		ErrorMessage: resData.ErrorMessage,
+		CreatedAt:    time.Now().Format(time.RFC3339),
+	}
 }
 
 // GetResults godoc

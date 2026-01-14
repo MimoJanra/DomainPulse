@@ -164,29 +164,49 @@ func (s *Scheduler) runRealtimeLoop(check models.Check, stopChan chan struct{}) 
 }
 
 func (s *Scheduler) runRealtimeCheck(check models.Check, stopChan chan struct{}) {
+	s.waitForGlobalRateLimit()
+	s.waitForCheckRateLimit(check)
+	s.runCheck(check)
+}
+
+func (s *Scheduler) waitForGlobalRateLimit() {
 	if GlobalRateLimiter != nil {
 		GlobalRateLimiter.Wait()
 	}
+}
 
+func (s *Scheduler) waitForCheckRateLimit(check models.Check) {
+	limiter := s.getOrCreateRateLimiter(check)
+	if limiter != nil {
+		limiter.Wait()
+	}
+}
+
+func (s *Scheduler) getOrCreateRateLimiter(check models.Check) *RateLimiter {
 	s.mu.RLock()
 	limiter, hasLimiter := s.rateLimiters[check.ID]
 	s.mu.RUnlock()
 
 	if hasLimiter {
-		limiter.Wait()
-	} else if check.RateLimitPerMinute > 0 {
-		minIntervalMS := 0
-		if check.RateLimitPerMinute > 0 {
-			minIntervalMS = (60 * 1000) / check.RateLimitPerMinute
-		}
-		s.mu.Lock()
-		s.rateLimiters[check.ID] = NewRateLimiter(check.RateLimitPerMinute, minIntervalMS)
-		limiter = s.rateLimiters[check.ID]
-		s.mu.Unlock()
-		limiter.Wait()
+		return limiter
 	}
 
-	s.runCheck(check)
+	if check.RateLimitPerMinute <= 0 {
+		return nil
+	}
+
+	return s.createRateLimiterForCheck(check)
+}
+
+func (s *Scheduler) createRateLimiterForCheck(check models.Check) *RateLimiter {
+	minIntervalMS := (60 * 1000) / check.RateLimitPerMinute
+	limiter := NewRateLimiter(check.RateLimitPerMinute, minIntervalMS)
+
+	s.mu.Lock()
+	s.rateLimiters[check.ID] = limiter
+	s.mu.Unlock()
+
+	return limiter
 }
 
 func (s *Scheduler) runCheck(check models.Check) {
@@ -227,43 +247,63 @@ func (s *Scheduler) updateSchedule() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	currentCheckIDs := s.processChecks(checks)
+	s.cleanupRemovedChecks(currentCheckIDs)
+}
+
+func (s *Scheduler) processChecks(checks []models.Check) map[int]bool {
 	currentCheckIDs := make(map[int]bool)
+
 	for _, check := range checks {
 		currentCheckIDs[check.ID] = true
 
 		if check.Enabled {
-			needsUpdate := false
-			if _, exists := s.tickers[check.ID]; exists {
-				if check.RealtimeMode {
-					needsUpdate = true
-				}
-			} else if _, realtimeExists := s.realtimeLoops[check.ID]; realtimeExists {
-				if !check.RealtimeMode {
-					needsUpdate = true
-				}
-			} else {
-				needsUpdate = true
-			}
-
-			if needsUpdate {
+			if s.checkNeedsUpdate(check) {
 				s.scheduleCheck(check)
 			}
 		} else {
-			if ticker, exists := s.tickers[check.ID]; exists {
-				ticker.Stop()
-				delete(s.tickers, check.ID)
-			}
-			if stopChan, exists := s.realtimeLoops[check.ID]; exists {
-				close(stopChan)
-				delete(s.realtimeLoops, check.ID)
-			}
+			s.unscheduleCheck(check.ID)
 		}
 	}
 
+	return currentCheckIDs
+}
+
+func (s *Scheduler) checkNeedsUpdate(check models.Check) bool {
+	hasTicker := s.tickers[check.ID] != nil
+	hasRealtimeLoop := s.realtimeLoops[check.ID] != nil
+
+	if hasTicker && check.RealtimeMode {
+		return true
+	}
+	if hasRealtimeLoop && !check.RealtimeMode {
+		return true
+	}
+	return !hasTicker && !hasRealtimeLoop
+}
+
+func (s *Scheduler) unscheduleCheck(checkID int) {
+	if ticker, exists := s.tickers[checkID]; exists {
+		ticker.Stop()
+		delete(s.tickers, checkID)
+	}
+	if stopChan, exists := s.realtimeLoops[checkID]; exists {
+		close(stopChan)
+		delete(s.realtimeLoops, checkID)
+	}
+}
+
+func (s *Scheduler) cleanupRemovedChecks(currentCheckIDs map[int]bool) {
 	for id, ticker := range s.tickers {
 		if !currentCheckIDs[id] {
 			ticker.Stop()
 			delete(s.tickers, id)
+		}
+	}
+	for id, stopChan := range s.realtimeLoops {
+		if !currentCheckIDs[id] {
+			close(stopChan)
+			delete(s.realtimeLoops, id)
 		}
 	}
 }

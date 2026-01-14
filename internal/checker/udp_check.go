@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -57,12 +58,16 @@ func RunUDPCheck(host string, port int, payload string, timeout time.Duration) C
 	}
 
 	buffer := make([]byte, 1024)
-	conn.SetReadDeadline(time.Now().Add(timeout))
+	err = conn.SetReadDeadline(time.Now().Add(timeout))
+	if err != nil {
+		return CheckResult{}
+	}
 	_, err = conn.Read(buffer)
 	duration := time.Since(start).Milliseconds()
 
 	if err != nil {
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
 			return CheckResult{
 				Status:       "success",
 				DurationMS:   int(duration),

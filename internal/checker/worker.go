@@ -102,61 +102,94 @@ func (wp *WorkerPool) worker(id int) {
 
 func (wp *WorkerPool) executeCheck(job CheckJob) {
 	startTime := time.Now()
-	var result CheckResult
-	timeout := 10 * time.Second
+	timeout := wp.getTimeout(job.Check)
 
-	if job.Check.Params.TimeoutMS > 0 {
-		timeout = time.Duration(job.Check.Params.TimeoutMS) * time.Millisecond
-	}
-
-	switch job.Check.Type {
-	case "http":
-		path := job.Check.Params.Path
-		if path == "" {
-			path = "/"
-		}
-		scheme := job.Check.Params.Scheme
-		if scheme == "" {
-			scheme = "https"
-		}
-		method := job.Check.Params.Method
-		if method == "" {
-			method = "GET"
-		}
-		fullURL := scheme + "://" + job.Domain.Name
-		if len(path) > 0 && path[0] != '/' {
-			fullURL += "/"
-		}
-		fullURL += path
-		result = RunHTTPCheckWithMethod(fullURL, method, job.Check.Params.Body, timeout)
-
-	case "icmp":
-		result = RunICMPCheck(job.Domain.Name, timeout)
-
-	case "tcp":
-		port := job.Check.Params.Port
-		if port <= 0 {
-			log.Printf("invalid port for TCP check %d", job.Check.ID)
-			return
-		}
-		result = RunTCPCheckWithPayload(job.Domain.Name, port, job.Check.Params.Payload, timeout)
-
-	case "udp":
-		port := job.Check.Params.Port
-		if port <= 0 {
-			log.Printf("invalid port for UDP check %d", job.Check.ID)
-			return
-		}
-		payload := job.Check.Params.Payload
-		result = RunUDPCheck(job.Domain.Name, port, payload, timeout)
-
-	default:
-		log.Printf("unsupported check type: %s for check %d", job.Check.Type, job.Check.ID)
+	result := wp.runCheckByType(job, timeout)
+	if result == nil {
 		return
 	}
 
-	duration := time.Since(startTime)
+	wp.saveResult(job, *result, time.Since(startTime))
+}
 
+func (wp *WorkerPool) getTimeout(check models.Check) time.Duration {
+	timeout := 10 * time.Second
+	if check.Params.TimeoutMS > 0 {
+		timeout = time.Duration(check.Params.TimeoutMS) * time.Millisecond
+	}
+	return timeout
+}
+
+func (wp *WorkerPool) runCheckByType(job CheckJob, timeout time.Duration) *CheckResult {
+	switch job.Check.Type {
+	case "http":
+		result := wp.runHTTPCheck(job, timeout)
+		return &result
+	case "icmp":
+		result := RunICMPCheck(job.Domain.Name, timeout)
+		return &result
+	case "tcp":
+		return wp.runTCPCheck(job, timeout)
+	case "udp":
+		return wp.runUDPCheck(job, timeout)
+	default:
+		log.Printf("unsupported check type: %s for check %d", job.Check.Type, job.Check.ID)
+		return nil
+	}
+}
+
+func (wp *WorkerPool) runHTTPCheck(job CheckJob, timeout time.Duration) CheckResult {
+	fullURL := buildHTTPURL(job.Domain.Name, job.Check.Params)
+	method := normalizeHTTPMethod(job.Check.Params.Method)
+	return RunHTTPCheckWithMethod(fullURL, method, job.Check.Params.Body, timeout)
+}
+
+func buildHTTPURL(domainName string, params models.CheckParams) string {
+	path := params.Path
+	if path == "" {
+		path = "/"
+	}
+	scheme := params.Scheme
+	if scheme == "" {
+		scheme = "https"
+	}
+
+	fullURL := scheme + "://" + domainName
+	if len(path) > 0 && path[0] != '/' {
+		fullURL += "/"
+	}
+	fullURL += path
+	return fullURL
+}
+
+func normalizeHTTPMethod(method string) string {
+	if method == "" {
+		return "GET"
+	}
+	return method
+}
+
+func (wp *WorkerPool) runTCPCheck(job CheckJob, timeout time.Duration) *CheckResult {
+	port := job.Check.Params.Port
+	if port <= 0 {
+		log.Printf("invalid port for TCP check %d", job.Check.ID)
+		return nil
+	}
+	result := RunTCPCheckWithPayload(job.Domain.Name, port, job.Check.Params.Payload, timeout)
+	return &result
+}
+
+func (wp *WorkerPool) runUDPCheck(job CheckJob, timeout time.Duration) *CheckResult {
+	port := job.Check.Params.Port
+	if port <= 0 {
+		log.Printf("invalid port for UDP check %d", job.Check.ID)
+		return nil
+	}
+	result := RunUDPCheck(job.Domain.Name, port, job.Check.Params.Payload, timeout)
+	return &result
+}
+
+func (wp *WorkerPool) saveResult(job CheckJob, result CheckResult, duration time.Duration) {
 	res := models.Result{
 		CheckID:      job.Check.ID,
 		Status:       result.Status,
@@ -171,10 +204,22 @@ func (wp *WorkerPool) executeCheck(job CheckJob) {
 		log.Printf("failed to save result for check %d: %v", job.Check.ID, err)
 	}
 
-	wp.updateMetrics(job.Check.ID, duration, result.Status == "error" || result.Status == "timeout")
+	isError := result.Status == "error" || result.Status == "timeout"
+	wp.updateMetrics(job.Check.ID, duration, isError)
 }
 
 func (wp *WorkerPool) updateMetrics(checkID int, duration time.Duration, isError bool) {
+	metrics := wp.getOrCreateMetrics(checkID)
+	
+	metrics.mu.Lock()
+	defer metrics.mu.Unlock()
+
+	wp.updateErrorMetrics(metrics, isError)
+	wp.updateDurationMetrics(metrics, duration)
+	wp.checkOverload(checkID, metrics)
+}
+
+func (wp *WorkerPool) getOrCreateMetrics(checkID int) *CheckMetrics {
 	wp.metricsMu.Lock()
 	defer wp.metricsMu.Unlock()
 
@@ -183,29 +228,35 @@ func (wp *WorkerPool) updateMetrics(checkID int, duration time.Duration, isError
 		metrics = &CheckMetrics{}
 		wp.checkMetrics[checkID] = metrics
 	}
+	return metrics
+}
 
-	metrics.mu.Lock()
-	defer metrics.mu.Unlock()
-
+func (wp *WorkerPool) updateErrorMetrics(metrics *CheckMetrics, isError bool) {
 	now := time.Now()
-
 	if isError {
 		metrics.errorCount++
 		metrics.lastErrorTime = now
 	} else {
 		metrics.errorCount = 0
 	}
+	metrics.lastCheckTime = now
+}
 
+func (wp *WorkerPool) updateDurationMetrics(metrics *CheckMetrics, duration time.Duration) {
 	if metrics.sampleCount < 10 {
 		metrics.sampleCount++
 		metrics.averageDuration = (metrics.averageDuration*time.Duration(metrics.sampleCount-1) + duration) / time.Duration(metrics.sampleCount)
 	} else {
-		alpha := 0.2
-		metrics.averageDuration = time.Duration(float64(metrics.averageDuration)*(1-alpha) + float64(duration)*alpha)
+		metrics.averageDuration = wp.calculateExponentialMovingAverage(metrics.averageDuration, duration)
 	}
+}
 
-	metrics.lastCheckTime = now
+func (wp *WorkerPool) calculateExponentialMovingAverage(current, newValue time.Duration) time.Duration {
+	alpha := 0.2
+	return time.Duration(float64(current)*(1-alpha) + float64(newValue)*alpha)
+}
 
+func (wp *WorkerPool) checkOverload(checkID int, metrics *CheckMetrics) {
 	if metrics.errorCount >= 5 || metrics.averageDuration > 5*time.Second {
 		log.Printf("Check %d: overload detected (errors: %d, avg duration: %v). Consider reducing interval.",
 			checkID, metrics.errorCount, metrics.averageDuration)
