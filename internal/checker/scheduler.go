@@ -10,36 +10,39 @@ import (
 )
 
 type Scheduler struct {
-	checkRepo      *storage.CheckRepo
-	domainRepo     *storage.SQLiteDomainRepo
-	resultRepo     *storage.ResultRepo
-	workerPool     *WorkerPool
-	tickers        map[int]*time.Ticker
-	realtimeLoops  map[int]chan struct{}
-	rateLimiters   map[int]*RateLimiter  
-	stopChan       chan struct{}
-	mu             sync.RWMutex
-	running        bool
+	checkRepo        *storage.CheckRepo
+	domainRepo       *storage.SQLiteDomainRepo
+	resultRepo       *storage.ResultRepo
+	notificationRepo *storage.NotificationRepo
+	workerPool       *WorkerPool
+	tickers          map[int]*time.Ticker
+	realtimeLoops    map[int]chan struct{}
+	rateLimiters     map[int]*RateLimiter  
+	stopChan         chan struct{}
+	mu               sync.RWMutex
+	running          bool
 }
 
 func NewScheduler(
 	checkRepo *storage.CheckRepo,
 	domainRepo *storage.SQLiteDomainRepo,
 	resultRepo *storage.ResultRepo,
+	notificationRepo *storage.NotificationRepo,
 	workerCount int,
 ) *Scheduler {
-	workerPool := NewWorkerPool(workerCount, domainRepo, resultRepo)
+	workerPool := NewWorkerPool(workerCount, domainRepo, resultRepo, notificationRepo)
 	workerPool.Start()
 
 	return &Scheduler{
-		checkRepo:     checkRepo,
-		domainRepo:    domainRepo,
-		resultRepo:    resultRepo,
-		workerPool:    workerPool,
-		tickers:       make(map[int]*time.Ticker),
-		realtimeLoops: make(map[int]chan struct{}),
-		rateLimiters:  make(map[int]*RateLimiter),
-		stopChan:      make(chan struct{}),
+		checkRepo:        checkRepo,
+		domainRepo:       domainRepo,
+		resultRepo:       resultRepo,
+		notificationRepo: notificationRepo,
+		workerPool:       workerPool,
+		tickers:          make(map[int]*time.Ticker),
+		realtimeLoops:    make(map[int]chan struct{}),
+		rateLimiters:     make(map[int]*RateLimiter),
+		stopChan:         make(chan struct{}),
 	}
 }
 

@@ -80,3 +80,14 @@ type TimeIntervalResponse struct {
 	PageSize   int                `json:"page_size,omitempty"`
 	TotalPages int                `json:"total_pages,omitempty"`
 }
+
+type NotificationSettings struct {
+	ID              int    `json:"id" example:"1"`
+	Type            string `json:"type" example:"telegram"`
+	Enabled         bool   `json:"enabled" example:"true"`
+	Token           string `json:"token,omitempty" example:"123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"`
+	ChatID          string `json:"chat_id,omitempty" example:"-1001234567890"`
+	WebhookURL      string `json:"webhook_url,omitempty" example:"https://hooks.slack.com/services/..."`
+	NotifyOnFailure bool   `json:"notify_on_failure" example:"true"`
+	NotifyOnSuccess bool   `json:"notify_on_success" example:"false"`
+}

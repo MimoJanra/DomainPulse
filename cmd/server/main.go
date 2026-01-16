@@ -34,19 +34,21 @@ func main() {
 	domainRepo := storage.NewSQLiteDomainRepo(db)
 	checkRepo := storage.NewCheckRepo(db)
 	resultRepo := storage.NewResultRepo(db)
+	notificationRepo := storage.NewNotificationRepo(db)
 
 	checker.InitGlobalRateLimiter(1000)
 
 	workerCount := 5
-	scheduler := checker.NewScheduler(checkRepo, domainRepo, resultRepo, workerCount)
+	scheduler := checker.NewScheduler(checkRepo, domainRepo, resultRepo, notificationRepo, workerCount)
 
 	scheduler.Start()
 	defer scheduler.Stop()
 
 	server := &api.Server{
-		DomainRepo: domainRepo,
-		CheckRepo:  checkRepo,
-		ResultRepo: resultRepo,
+		DomainRepo:       domainRepo,
+		CheckRepo:        checkRepo,
+		ResultRepo:       resultRepo,
+		NotificationRepo: notificationRepo,
 	}
 
 	r := api.SetupRouter(server)

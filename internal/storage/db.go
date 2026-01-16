@@ -61,5 +61,21 @@ func InitDB() (*sql.DB, error) {
 		return nil, fmt.Errorf("error creating results table: %w", err)
 	}
 
+	_, err = db.Exec(`
+	CREATE TABLE IF NOT EXISTS notification_settings (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		type TEXT NOT NULL,
+		enabled INTEGER NOT NULL DEFAULT 1,
+		token TEXT,
+		chat_id TEXT,
+		webhook_url TEXT,
+		notify_on_failure INTEGER NOT NULL DEFAULT 1,
+		notify_on_success INTEGER NOT NULL DEFAULT 0
+	);
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("error creating notification_settings table: %w", err)
+	}
+
 	return db, nil
 }

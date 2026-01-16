@@ -6,18 +6,20 @@ import (
 	"time"
 
 	"github.com/MimoJanra/DomainPulse/internal/models"
+	"github.com/MimoJanra/DomainPulse/internal/notifications"
 	"github.com/MimoJanra/DomainPulse/internal/storage"
 )
 
 type WorkerPool struct {
-	workers      int
-	jobQueue     chan CheckJob
-	wg           sync.WaitGroup
-	stopChan     chan struct{}
-	domainRepo   *storage.SQLiteDomainRepo
-	resultRepo   *storage.ResultRepo
-	checkMetrics map[int]*CheckMetrics
-	metricsMu    sync.RWMutex
+	workers          int
+	jobQueue         chan CheckJob
+	wg               sync.WaitGroup
+	stopChan         chan struct{}
+	domainRepo       *storage.SQLiteDomainRepo
+	resultRepo       *storage.ResultRepo
+	notificationRepo *storage.NotificationRepo
+	checkMetrics     map[int]*CheckMetrics
+	metricsMu        sync.RWMutex
 }
 
 type CheckMetrics struct {
@@ -34,14 +36,15 @@ type CheckJob struct {
 	Domain models.Domain
 }
 
-func NewWorkerPool(workers int, domainRepo *storage.SQLiteDomainRepo, resultRepo *storage.ResultRepo) *WorkerPool {
+func NewWorkerPool(workers int, domainRepo *storage.SQLiteDomainRepo, resultRepo *storage.ResultRepo, notificationRepo *storage.NotificationRepo) *WorkerPool {
 	return &WorkerPool{
-		workers:      workers,
-		jobQueue:     make(chan CheckJob, 100),
-		stopChan:     make(chan struct{}),
-		domainRepo:   domainRepo,
-		resultRepo:   resultRepo,
-		checkMetrics: make(map[int]*CheckMetrics),
+		workers:          workers,
+		jobQueue:         make(chan CheckJob, 100),
+		stopChan:         make(chan struct{}),
+		domainRepo:       domainRepo,
+		resultRepo:       resultRepo,
+		notificationRepo: notificationRepo,
+		checkMetrics:     make(map[int]*CheckMetrics),
 	}
 }
 
@@ -206,6 +209,35 @@ func (wp *WorkerPool) saveResult(job CheckJob, result CheckResult, duration time
 
 	isError := result.Status == "error" || result.Status == "timeout"
 	wp.updateMetrics(job.Check.ID, duration, isError)
+	
+	wp.sendNotifications(job, result, res.CreatedAt)
+}
+
+func (wp *WorkerPool) sendNotifications(job CheckJob, result CheckResult, createdAt string) {
+	settingsList, err := wp.notificationRepo.GetEnabled()
+	if err != nil {
+		log.Printf("failed to get notification settings: %v", err)
+		return
+	}
+
+	if len(settingsList) == 0 {
+		return
+	}
+
+	isFailure := result.Status == "error" || result.Status == "timeout"
+	
+	msg := notifications.NotificationMessage{
+		CheckID:      job.Check.ID,
+		DomainName:   job.Domain.Name,
+		CheckType:    job.Check.Type,
+		Status:       result.Status,
+		ErrorMessage: result.ErrorMessage,
+		DurationMS:   result.DurationMS,
+		CreatedAt:    createdAt,
+	}
+
+	sender := notifications.NewNotificationSender()
+	sender.SendNotifications(settingsList, msg, isFailure)
 }
 
 func (wp *WorkerPool) updateMetrics(checkID int, duration time.Duration, isError bool) {

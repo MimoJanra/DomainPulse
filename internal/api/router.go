@@ -66,5 +66,20 @@ func SetupRouter(s *Server) http.Handler {
 		s.DisableCheck(w, r)
 	})
 
+	r.Get("/notifications", s.GetNotificationSettings)
+	r.Post("/notifications", s.CreateNotificationSettings)
+	r.Put("/notifications/{id}", func(w http.ResponseWriter, r *http.Request) {
+		s.UpdateNotificationSettings(w, r)
+	})
+	r.Delete("/notifications/{id}", func(w http.ResponseWriter, r *http.Request) {
+		s.DeleteNotificationSettings(w, r)
+	})
+	r.Post("/notifications/{id}/enable", func(w http.ResponseWriter, r *http.Request) {
+		s.EnableNotificationSettings(w, r)
+	})
+	r.Post("/notifications/{id}/disable", func(w http.ResponseWriter, r *http.Request) {
+		s.DisableNotificationSettings(w, r)
+	})
+
 	return r
 }

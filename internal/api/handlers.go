@@ -19,9 +19,10 @@ import (
 )
 
 type Server struct {
-	DomainRepo *storage.SQLiteDomainRepo
-	CheckRepo  *storage.CheckRepo
-	ResultRepo *storage.ResultRepo
+	DomainRepo      *storage.SQLiteDomainRepo
+	CheckRepo       *storage.CheckRepo
+	ResultRepo      *storage.ResultRepo
+	NotificationRepo *storage.NotificationRepo
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {
@@ -629,6 +630,225 @@ func (s *Server) GetCheckTimeIntervalData(w http.ResponseWriter, r *http.Request
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+// GetNotificationSettings godoc
+// @Summary Получить настройки уведомлений
+// @Description Возвращает список всех настроек уведомлений
+// @Tags notifications
+// @Produce json
+// @Success 200 {array} models.NotificationSettings
+// @Router /notifications [get]
+func (s *Server) GetNotificationSettings(w http.ResponseWriter, _ *http.Request) {
+	settings, err := s.NotificationRepo.GetAll()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get notification settings")
+		return
+	}
+	writeJSON(w, http.StatusOK, settings)
+}
+
+// CreateNotificationSettings godoc
+// @Summary Создать настройки уведомлений
+// @Description Создает новую настройку уведомлений для Telegram или Slack
+// @Tags notifications
+// @Accept json
+// @Produce json
+// @Param settings body object true "Настройки уведомлений" example({"type": "telegram", "enabled": true, "token": "123456:ABC-DEF", "chat_id": "-1001234567890", "notify_on_failure": true})
+// @Success 201 {object} models.NotificationSettings
+// @Failure 400 {string} string "invalid request body"
+// @Router /notifications [post]
+func (s *Server) CreateNotificationSettings(w http.ResponseWriter, r *http.Request) {
+	var settings models.NotificationSettings
+
+	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if settings.Type != "telegram" && settings.Type != "slack" {
+		writeError(w, http.StatusBadRequest, "type must be 'telegram' or 'slack'")
+		return
+	}
+
+	if settings.Type == "telegram" {
+		if settings.Token == "" || settings.ChatID == "" {
+			writeError(w, http.StatusBadRequest, "token and chat_id are required for telegram")
+			return
+		}
+	}
+
+	if settings.Type == "slack" {
+		if settings.WebhookURL == "" {
+			writeError(w, http.StatusBadRequest, "webhook_url is required for slack")
+			return
+		}
+	}
+
+	result, err := s.NotificationRepo.Add(settings)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to add notification settings")
+		return
+	}
+	writeJSON(w, http.StatusCreated, result)
+}
+
+// UpdateNotificationSettings godoc
+// @Summary Обновить настройки уведомлений
+// @Description Обновляет настройки уведомлений по ID
+// @Tags notifications
+// @Accept json
+// @Produce json
+// @Param id path int true "ID настроек"
+// @Param settings body object true "Настройки уведомлений"
+// @Success 200 {object} models.NotificationSettings
+// @Failure 400 {string} string "invalid request body"
+// @Failure 404 {string} string "notification settings not found"
+// @Router /notifications/{id} [put]
+func (s *Server) UpdateNotificationSettings(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid notification settings id")
+		return
+	}
+
+	_, err = s.NotificationRepo.GetByID(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "notification settings not found")
+		return
+	}
+
+	var settings models.NotificationSettings
+	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if settings.Type != "telegram" && settings.Type != "slack" {
+		writeError(w, http.StatusBadRequest, "type must be 'telegram' or 'slack'")
+		return
+	}
+
+	if settings.Type == "telegram" {
+		if settings.Token == "" || settings.ChatID == "" {
+			writeError(w, http.StatusBadRequest, "token and chat_id are required for telegram")
+			return
+		}
+	}
+
+	if settings.Type == "slack" {
+		if settings.WebhookURL == "" {
+			writeError(w, http.StatusBadRequest, "webhook_url is required for slack")
+			return
+		}
+	}
+
+	settings.ID = id
+	if err := s.NotificationRepo.Update(id, settings); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update notification settings")
+		return
+	}
+
+	updated, err := s.NotificationRepo.GetByID(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get updated settings")
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+// DeleteNotificationSettings godoc
+// @Summary Удалить настройки уведомлений
+// @Description Удаляет настройки уведомлений по ID
+// @Tags notifications
+// @Produce json
+// @Param id path int true "ID настроек"
+// @Success 200 {object} map[string]int
+// @Failure 404 {string} string "notification settings not found"
+// @Router /notifications/{id} [delete]
+func (s *Server) DeleteNotificationSettings(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid notification settings id")
+		return
+	}
+
+	_, err = s.NotificationRepo.GetByID(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "notification settings not found")
+		return
+	}
+
+	if err := s.NotificationRepo.Delete(id); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to delete notification settings")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": id})
+}
+
+// EnableNotificationSettings godoc
+// @Summary Включить уведомления
+// @Description Включает настройки уведомлений
+// @Tags notifications
+// @Produce json
+// @Param id path int true "ID настроек"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {string} string "notification settings not found"
+// @Router /notifications/{id}/enable [post]
+func (s *Server) EnableNotificationSettings(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid notification settings id")
+		return
+	}
+
+	_, err = s.NotificationRepo.GetByID(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "notification settings not found")
+		return
+	}
+
+	if err := s.NotificationRepo.SetEnabled(id, true); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to enable notification settings")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "enabled": true})
+}
+
+// DisableNotificationSettings godoc
+// @Summary Отключить уведомления
+// @Description Отключает настройки уведомлений
+// @Tags notifications
+// @Produce json
+// @Param id path int true "ID настроек"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {string} string "notification settings not found"
+// @Router /notifications/{id}/disable [post]
+func (s *Server) DisableNotificationSettings(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid notification settings id")
+		return
+	}
+
+	_, err = s.NotificationRepo.GetByID(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "notification settings not found")
+		return
+	}
+
+	if err := s.NotificationRepo.SetEnabled(id, false); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to disable notification settings")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "enabled": false})
 }
 
 // CreateCheckDirect godoc
