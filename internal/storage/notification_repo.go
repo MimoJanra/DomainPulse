@@ -15,6 +15,32 @@ func NewNotificationRepo(db *sql.DB) *NotificationRepo {
 	return &NotificationRepo{db: db}
 }
 
+type notifScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanNotificationSettings(s notifScanner) (models.NotificationSettings, error) {
+	var ns models.NotificationSettings
+	var token, chatID, webhookURL sql.NullString
+	var slowThreshold sql.NullInt64
+	if err := s.Scan(&ns.ID, &ns.Type, &ns.Enabled, &token, &chatID, &webhookURL, &ns.NotifyOnFailure, &ns.NotifyOnSuccess, &ns.NotifyOnSlowResponse, &slowThreshold); err != nil {
+		return models.NotificationSettings{}, err
+	}
+	if token.Valid {
+		ns.Token = token.String
+	}
+	if chatID.Valid {
+		ns.ChatID = chatID.String
+	}
+	if webhookURL.Valid {
+		ns.WebhookURL = webhookURL.String
+	}
+	if slowThreshold.Valid {
+		ns.SlowResponseThreshold = int(slowThreshold.Int64)
+	}
+	return ns, nil
+}
+
 func (r *NotificationRepo) GetAll() ([]models.NotificationSettings, error) {
 	rows, err := r.db.Query(`
 		SELECT id, type, enabled, token, chat_id, webhook_url, notify_on_failure, notify_on_success, notify_on_slow_response, slow_response_threshold_ms
@@ -28,23 +54,9 @@ func (r *NotificationRepo) GetAll() ([]models.NotificationSettings, error) {
 
 	var settings []models.NotificationSettings
 	for rows.Next() {
-		var s models.NotificationSettings
-		var token, chatID, webhookURL sql.NullString
-		var slowThreshold sql.NullInt64
-		if err := rows.Scan(&s.ID, &s.Type, &s.Enabled, &token, &chatID, &webhookURL, &s.NotifyOnFailure, &s.NotifyOnSuccess, &s.NotifyOnSlowResponse, &slowThreshold); err != nil {
+		s, err := scanNotificationSettings(rows)
+		if err != nil {
 			return nil, err
-		}
-		if token.Valid {
-			s.Token = token.String
-		}
-		if chatID.Valid {
-			s.ChatID = chatID.String
-		}
-		if webhookURL.Valid {
-			s.WebhookURL = webhookURL.String
-		}
-		if slowThreshold.Valid {
-			s.SlowResponseThreshold = int(slowThreshold.Int64)
 		}
 		settings = append(settings, s)
 	}
@@ -57,26 +69,7 @@ func (r *NotificationRepo) GetByID(id int) (models.NotificationSettings, error) 
 		FROM notification_settings
 		WHERE id = ?
 	`, id)
-	var s models.NotificationSettings
-	var token, chatID, webhookURL sql.NullString
-	var slowThreshold sql.NullInt64
-	err := row.Scan(&s.ID, &s.Type, &s.Enabled, &token, &chatID, &webhookURL, &s.NotifyOnFailure, &s.NotifyOnSuccess, &s.NotifyOnSlowResponse, &slowThreshold)
-	if err != nil {
-		return s, err
-	}
-	if token.Valid {
-		s.Token = token.String
-	}
-	if chatID.Valid {
-		s.ChatID = chatID.String
-	}
-	if webhookURL.Valid {
-		s.WebhookURL = webhookURL.String
-	}
-	if slowThreshold.Valid {
-		s.SlowResponseThreshold = int(slowThreshold.Int64)
-	}
-	return s, nil
+	return scanNotificationSettings(row)
 }
 
 func (r *NotificationRepo) GetEnabled() ([]models.NotificationSettings, error) {
@@ -93,23 +86,9 @@ func (r *NotificationRepo) GetEnabled() ([]models.NotificationSettings, error) {
 
 	var settings []models.NotificationSettings
 	for rows.Next() {
-		var s models.NotificationSettings
-		var token, chatID, webhookURL sql.NullString
-		var slowThreshold sql.NullInt64
-		if err := rows.Scan(&s.ID, &s.Type, &s.Enabled, &token, &chatID, &webhookURL, &s.NotifyOnFailure, &s.NotifyOnSuccess, &s.NotifyOnSlowResponse, &slowThreshold); err != nil {
+		s, err := scanNotificationSettings(rows)
+		if err != nil {
 			return nil, err
-		}
-		if token.Valid {
-			s.Token = token.String
-		}
-		if chatID.Valid {
-			s.ChatID = chatID.String
-		}
-		if webhookURL.Valid {
-			s.WebhookURL = webhookURL.String
-		}
-		if slowThreshold.Valid {
-			s.SlowResponseThreshold = int(slowThreshold.Int64)
 		}
 		settings = append(settings, s)
 	}
@@ -121,31 +100,18 @@ func (r *NotificationRepo) Add(settings models.NotificationSettings) (models.Not
 		return models.NotificationSettings{}, fmt.Errorf("unsupported notification type: %s", settings.Type)
 	}
 
-	enabledInt := 0
-	if settings.Enabled {
-		enabledInt = 1
-	}
-	notifyOnFailureInt := 0
-	if settings.NotifyOnFailure {
-		notifyOnFailureInt = 1
-	}
-	notifyOnSuccessInt := 0
-	if settings.NotifyOnSuccess {
-		notifyOnSuccessInt = 1
-	}
-	notifyOnSlowInt := 0
-	if settings.NotifyOnSlowResponse {
-		notifyOnSlowInt = 1
-	}
-
 	res, err := r.db.Exec(`
 		INSERT INTO notification_settings(type, enabled, token, chat_id, webhook_url, notify_on_failure, notify_on_success, notify_on_slow_response, slow_response_threshold_ms)
 		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, settings.Type, enabledInt, settings.Token, settings.ChatID, settings.WebhookURL, notifyOnFailureInt, notifyOnSuccessInt, notifyOnSlowInt, settings.SlowResponseThreshold)
+	`, settings.Type, boolToInt(settings.Enabled), settings.Token, settings.ChatID, settings.WebhookURL,
+		boolToInt(settings.NotifyOnFailure), boolToInt(settings.NotifyOnSuccess), boolToInt(settings.NotifyOnSlowResponse), settings.SlowResponseThreshold)
 	if err != nil {
 		return models.NotificationSettings{}, err
 	}
-	id, _ := res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return models.NotificationSettings{}, fmt.Errorf("last insert id: %w", err)
+	}
 	settings.ID = int(id)
 	return settings, nil
 }
@@ -155,28 +121,12 @@ func (r *NotificationRepo) Update(id int, settings models.NotificationSettings) 
 		return fmt.Errorf("unsupported notification type: %s", settings.Type)
 	}
 
-	enabledInt := 0
-	if settings.Enabled {
-		enabledInt = 1
-	}
-	notifyOnFailureInt := 0
-	if settings.NotifyOnFailure {
-		notifyOnFailureInt = 1
-	}
-	notifyOnSuccessInt := 0
-	if settings.NotifyOnSuccess {
-		notifyOnSuccessInt = 1
-	}
-	notifyOnSlowInt := 0
-	if settings.NotifyOnSlowResponse {
-		notifyOnSlowInt = 1
-	}
-
 	_, err := r.db.Exec(`
 		UPDATE notification_settings
 		SET type = ?, enabled = ?, token = ?, chat_id = ?, webhook_url = ?, notify_on_failure = ?, notify_on_success = ?, notify_on_slow_response = ?, slow_response_threshold_ms = ?
 		WHERE id = ?
-	`, settings.Type, enabledInt, settings.Token, settings.ChatID, settings.WebhookURL, notifyOnFailureInt, notifyOnSuccessInt, notifyOnSlowInt, settings.SlowResponseThreshold, id)
+	`, settings.Type, boolToInt(settings.Enabled), settings.Token, settings.ChatID, settings.WebhookURL,
+		boolToInt(settings.NotifyOnFailure), boolToInt(settings.NotifyOnSuccess), boolToInt(settings.NotifyOnSlowResponse), settings.SlowResponseThreshold, id)
 	return err
 }
 
@@ -186,10 +136,6 @@ func (r *NotificationRepo) Delete(id int) error {
 }
 
 func (r *NotificationRepo) SetEnabled(id int, enabled bool) error {
-	enabledInt := 0
-	if enabled {
-		enabledInt = 1
-	}
-	_, err := r.db.Exec(`UPDATE notification_settings SET enabled = ? WHERE id = ?`, enabledInt, id)
+	_, err := r.db.Exec(`UPDATE notification_settings SET enabled = ? WHERE id = ?`, boolToInt(enabled), id)
 	return err
 }

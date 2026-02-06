@@ -162,7 +162,7 @@ func (s *Scheduler) scheduleCheck(check models.Check) {
 	if check.RealtimeMode {
 		stopChan := make(chan struct{})
 		s.realtimeLoops[check.ID] = stopChan
-		
+
 		go s.runRealtimeLoop(check, stopChan)
 	} else {
 		interval := time.Duration(check.IntervalSeconds) * time.Second
@@ -191,7 +191,7 @@ func (s *Scheduler) runRealtimeLoop(check models.Check, stopChan chan struct{}) 
 			return
 		case <-s.stopChan:
 			return
-		default:
+		case <-time.After(10 * time.Millisecond):
 			s.runRealtimeCheck(check)
 		}
 	}

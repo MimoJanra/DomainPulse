@@ -20,9 +20,9 @@ import (
 )
 
 type Server struct {
-	DomainRepo      *storage.SQLiteDomainRepo
-	CheckRepo       *storage.CheckRepo
-	ResultRepo      *storage.ResultRepo
+	DomainRepo       *storage.SQLiteDomainRepo
+	CheckRepo        *storage.CheckRepo
+	ResultRepo       *storage.ResultRepo
 	NotificationRepo *storage.NotificationRepo
 }
 
@@ -46,6 +46,93 @@ var supportedCheckTypes = map[string]struct{}{
 	"tcp":  {},
 	"udp":  {},
 	"tls":  {},
+}
+
+// --- Helper functions ---
+
+func parseCheckID(r *http.Request) (int, error) {
+	checkIDStr := chi.URLParam(r, "id")
+	checkID, err := strconv.Atoi(checkIDStr)
+	if err != nil || checkID <= 0 {
+		return 0, errors.New("invalid check id")
+	}
+	return checkID, nil
+}
+
+func parseTimeRange(r *http.Request) (from, to *time.Time, err error) {
+	fromStr := r.URL.Query().Get("from")
+	if fromStr != "" {
+		parsed, parseErr := time.Parse(time.RFC3339, fromStr)
+		if parseErr != nil {
+			return nil, nil, errors.New("invalid from parameter, use RFC3339 format")
+		}
+		from = &parsed
+	}
+
+	toStr := r.URL.Query().Get("to")
+	if toStr != "" {
+		parsed, parseErr := time.Parse(time.RFC3339, toStr)
+		if parseErr != nil {
+			return nil, nil, errors.New("invalid to parameter, use RFC3339 format")
+		}
+		to = &parsed
+	}
+
+	return from, to, nil
+}
+
+func parsePagination(r *http.Request, defaultPageSize int) (page, pageSize int) {
+	page = 1
+	pageSize = defaultPageSize
+	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+	if pageSizeStr := r.URL.Query().Get("page_size"); pageSizeStr != "" {
+		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 {
+			pageSize = ps
+		}
+	}
+	return page, pageSize
+}
+
+func validateCheckParams(checkType string, params *models.CheckParams) error {
+	switch checkType {
+	case "http":
+		if params.Path == "" {
+			params.Path = "/"
+		}
+	case "tcp", "udp":
+		if params.Port <= 0 {
+			return errors.New("port is required for tcp/udp checks")
+		}
+	case "tls":
+		if params.Port <= 0 {
+			return errors.New("port is required for tls check")
+		}
+	}
+	return nil
+}
+
+func validateNotificationSettings(settings models.NotificationSettings) error {
+	if settings.Type != "telegram" && settings.Type != "slack" {
+		return errors.New("type must be 'telegram' or 'slack'")
+	}
+
+	if settings.Type == "telegram" {
+		if settings.Token == "" || settings.ChatID == "" {
+			return errors.New("token and chat_id are required for telegram")
+		}
+	}
+
+	if settings.Type == "slack" {
+		if settings.WebhookURL == "" {
+			return errors.New("webhook_url is required for slack")
+		}
+	}
+
+	return nil
 }
 
 func validateDomain(raw string) (string, error) {
@@ -84,6 +171,8 @@ func validateDomain(raw string) (string, error) {
 	}
 	return host, nil
 }
+
+// --- Domain handlers ---
 
 // GetDomains godoc
 // @Summary Получить список доменов
@@ -157,6 +246,8 @@ func (s *Server) DeleteDomainByID(w http.ResponseWriter, _ *http.Request, id int
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": id})
 }
 
+// --- Check handlers ---
+
 // GetCheck godoc
 // @Summary Получить проверки для домена
 // @Description Возвращает список всех проверок, связанных с доменом
@@ -228,21 +319,9 @@ func (s *Server) CreateCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	body.Type = strings.ToLower(body.Type)
-	switch body.Type {
-	case "http":
-		if body.Params.Path == "" {
-			body.Params.Path = "/"
-		}
-	case "tcp", "udp":
-		if body.Params.Port <= 0 {
-			writeError(w, http.StatusBadRequest, "port is required for tcp/udp checks")
-			return
-		}
-	case "tls":
-		if body.Params.Port <= 0 {
-			writeError(w, http.StatusBadRequest, "port is required for tls check")
-			return
-		}
+	if err := validateCheckParams(body.Type, &body.Params); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	var check models.Check
@@ -333,37 +412,9 @@ func (s *Server) getCheckTimeout(check models.Check) time.Duration {
 }
 
 func (s *Server) runHTTPCheckForDomain(domain models.Domain, check models.Check, timeout time.Duration) checker.CheckResult {
-	fullURL := s.buildHTTPURLForDomain(domain.Name, check.Params)
-	method := s.normalizeHTTPMethod(check.Params.Method)
+	fullURL := checker.BuildHTTPURL(domain.Name, check.Params)
+	method := checker.NormalizeHTTPMethod(check.Params.Method)
 	return checker.RunHTTPCheckWithMethodAndHeaders(fullURL, method, check.Params.Body, check.Params.Headers, timeout)
-}
-
-func (s *Server) buildHTTPURLForDomain(domainName string, params models.CheckParams) string {
-	path := params.Path
-	if path == "" {
-		path = "/"
-	}
-	scheme := params.Scheme
-	if scheme == "" {
-		scheme = "https"
-	}
-	host := domainName
-	if ip := net.ParseIP(domainName); ip != nil && ip.To4() == nil {
-		host = "[" + domainName + "]"
-	}
-	fullURL := scheme + "://" + host
-	if !strings.HasPrefix(path, "/") {
-		fullURL += "/"
-	}
-	fullURL += path
-	return fullURL
-}
-
-func (s *Server) normalizeHTTPMethod(method string) string {
-	if method == "" {
-		return "GET"
-	}
-	return method
 }
 
 func (s *Server) runTCPCheckForDomain(domain models.Domain, check models.Check, timeout time.Duration) *checker.CheckResult {
@@ -408,13 +459,8 @@ func (s *Server) createResult(check models.Check, resData checker.CheckResult) m
 	}
 }
 
-// GetResults godoc
-// @Summary Получить результаты проверок
-// @Description Возвращает список всех результатов проверок
-// @Tags results
-// @Produce json
-// @Success 200 {array} models.Result
-// @Router /results [get]
+// --- Result handlers ---
+
 // GetResults godoc
 // @Summary Получить результаты проверок
 // @Description Возвращает список всех результатов проверок
@@ -444,24 +490,10 @@ func (s *Server) GetResults(w http.ResponseWriter, _ *http.Request) {
 // @Success 200 {object} models.ResultsResponse
 // @Failure 400 {string} string "invalid check id or parameters"
 // @Router /checks/{id}/results [get]
-// GetResultsByCheckID godoc
-// @Summary Получить результаты проверки
-// @Description Возвращает список результатов для конкретной проверки с фильтрацией по периоду и пагинацией
-// @Tags results
-// @Produce json
-// @Param id path int true "ID проверки"
-// @Param from query string false "Начало периода" example:"2024-01-01T00:00:00Z"
-// @Param to query string false "Конец периода" example:"2024-01-31T23:59:59Z"
-// @Param page query int false "Номер страницы" default:"1"
-// @Param page_size query int false "Размер страницы" default:"50"
-// @Success 200 {object} models.ResultsResponse
-// @Failure 400 {string} string "invalid check id or parameters"
-// @Router /checks/{id}/results [get]
 func (s *Server) GetResultsByCheckID(w http.ResponseWriter, r *http.Request) {
-	checkIDStr := chi.URLParam(r, "id")
-	checkID, err := strconv.Atoi(checkIDStr)
-	if err != nil || checkID <= 0 {
-		writeError(w, http.StatusBadRequest, "invalid check id")
+	checkID, err := parseCheckID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -471,39 +503,13 @@ func (s *Server) GetResultsByCheckID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var from, to *time.Time
-	fromStr := r.URL.Query().Get("from")
-	if fromStr != "" {
-		parsed, err := time.Parse(time.RFC3339, fromStr)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid from parameter, use RFC3339 format")
-			return
-		}
-		from = &parsed
+	from, to, err := parseTimeRange(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
-	toStr := r.URL.Query().Get("to")
-	if toStr != "" {
-		parsed, err := time.Parse(time.RFC3339, toStr)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid to parameter, use RFC3339 format")
-			return
-		}
-		to = &parsed
-	}
-
-	page := 1
-	pageSize := 50
-	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
-	if pageSizeStr := r.URL.Query().Get("page_size"); pageSizeStr != "" {
-		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 {
-			pageSize = ps
-		}
-	}
+	page, pageSize := parsePagination(r, 50)
 
 	results, total, err := s.ResultRepo.GetByCheckIDWithPagination(checkID, from, to, page, pageSize)
 	if err != nil {
@@ -540,10 +546,9 @@ func (s *Server) GetResultsByCheckID(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {string} string "check not found"
 // @Router /checks/{id}/stats [get]
 func (s *Server) GetCheckStats(w http.ResponseWriter, r *http.Request) {
-	checkIDStr := chi.URLParam(r, "id")
-	checkID, err := strconv.Atoi(checkIDStr)
-	if err != nil || checkID <= 0 {
-		writeError(w, http.StatusBadRequest, "invalid check id")
+	checkID, err := parseCheckID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -553,25 +558,10 @@ func (s *Server) GetCheckStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var from, to *time.Time
-	fromStr := r.URL.Query().Get("from")
-	if fromStr != "" {
-		parsed, err := time.Parse(time.RFC3339, fromStr)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid from parameter, use RFC3339 format")
-			return
-		}
-		from = &parsed
-	}
-
-	toStr := r.URL.Query().Get("to")
-	if toStr != "" {
-		parsed, err := time.Parse(time.RFC3339, toStr)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid to parameter, use RFC3339 format")
-			return
-		}
-		to = &parsed
+	from, to, err := parseTimeRange(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	stats, err := s.ResultRepo.GetStats(checkID, from, to)
@@ -605,10 +595,9 @@ func (s *Server) GetCheckStats(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {string} string "check not found"
 // @Router /checks/{id}/intervals [get]
 func (s *Server) GetCheckTimeIntervalData(w http.ResponseWriter, r *http.Request) {
-	checkIDStr := chi.URLParam(r, "id")
-	checkID, err := strconv.Atoi(checkIDStr)
-	if err != nil || checkID <= 0 {
-		writeError(w, http.StatusBadRequest, "invalid check id")
+	checkID, err := parseCheckID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -627,39 +616,13 @@ func (s *Server) GetCheckTimeIntervalData(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var from, to *time.Time
-	fromStr := r.URL.Query().Get("from")
-	if fromStr != "" {
-		parsed, err := time.Parse(time.RFC3339, fromStr)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid from parameter, use RFC3339 format")
-			return
-		}
-		from = &parsed
+	from, to, err := parseTimeRange(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
-	toStr := r.URL.Query().Get("to")
-	if toStr != "" {
-		parsed, err := time.Parse(time.RFC3339, toStr)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid to parameter, use RFC3339 format")
-			return
-		}
-		to = &parsed
-	}
-
-	page := 1
-	pageSize := 100
-	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
-	if pageSizeStr := r.URL.Query().Get("page_size"); pageSizeStr != "" {
-		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 {
-			pageSize = ps
-		}
-	}
+	page, pageSize := parsePagination(r, 100)
 
 	data, total, err := s.ResultRepo.GetByTimeInterval(checkID, interval, from, to, page, pageSize)
 	if err != nil {
@@ -687,6 +650,8 @@ func (s *Server) GetCheckTimeIntervalData(w http.ResponseWriter, r *http.Request
 
 	writeJSON(w, http.StatusOK, response)
 }
+
+// --- Notification handlers ---
 
 // GetNotificationSettings godoc
 // @Summary Получить настройки уведомлений
@@ -722,23 +687,9 @@ func (s *Server) CreateNotificationSettings(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if settings.Type != "telegram" && settings.Type != "slack" {
-		writeError(w, http.StatusBadRequest, "type must be 'telegram' or 'slack'")
+	if err := validateNotificationSettings(settings); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
-	}
-
-	if settings.Type == "telegram" {
-		if settings.Token == "" || settings.ChatID == "" {
-			writeError(w, http.StatusBadRequest, "token and chat_id are required for telegram")
-			return
-		}
-	}
-
-	if settings.Type == "slack" {
-		if settings.WebhookURL == "" {
-			writeError(w, http.StatusBadRequest, "webhook_url is required for slack")
-			return
-		}
 	}
 
 	result, err := s.NotificationRepo.Add(settings)
@@ -781,23 +732,9 @@ func (s *Server) UpdateNotificationSettings(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if settings.Type != "telegram" && settings.Type != "slack" {
-		writeError(w, http.StatusBadRequest, "type must be 'telegram' or 'slack'")
+	if err := validateNotificationSettings(settings); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
-	}
-
-	if settings.Type == "telegram" {
-		if settings.Token == "" || settings.ChatID == "" {
-			writeError(w, http.StatusBadRequest, "token and chat_id are required for telegram")
-			return
-		}
-	}
-
-	if settings.Type == "slack" {
-		if settings.WebhookURL == "" {
-			writeError(w, http.StatusBadRequest, "webhook_url is required for slack")
-			return
-		}
 	}
 
 	settings.ID = id
@@ -907,6 +844,8 @@ func (s *Server) DisableNotificationSettings(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "enabled": false})
 }
 
+// --- Check CRUD handlers ---
+
 // CreateCheckDirect godoc
 // @Summary Создать проверку
 // @Description Создает новую проверку (http, icmp, tcp, udp) с указанием domain_id в теле запроса
@@ -958,32 +897,16 @@ func (s *Server) CreateCheckDirect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	body.Type = strings.ToLower(body.Type)
-	switch body.Type {
-	case "http":
-		if body.Params.Path == "" {
-			body.Params.Path = "/"
-		}
-	case "tcp", "udp":
-		if body.Params.Port <= 0 {
-			writeError(w, http.StatusBadRequest, "port is required for tcp/udp checks")
-			return
-		}
-	case "tls":
-		if body.Params.Port <= 0 {
-			writeError(w, http.StatusBadRequest, "port is required for tls check")
-			return
-		}
+	if err := validateCheckParams(body.Type, &body.Params); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	var check models.Check
 	if body.RealtimeMode || body.RateLimitPerMinute > 0 {
-		var err2 error
-		check, err2 = s.CheckRepo.AddWithRealtime(body.DomainID, body.Type, body.IntervalSeconds, body.Params, body.Enabled, body.RealtimeMode, body.RateLimitPerMinute)
-		err = err2
+		check, err = s.CheckRepo.AddWithRealtime(body.DomainID, body.Type, body.IntervalSeconds, body.Params, body.Enabled, body.RealtimeMode, body.RateLimitPerMinute)
 	} else {
-		var err2 error
-		check, err2 = s.CheckRepo.Add(body.DomainID, body.Type, body.IntervalSeconds, body.Params, body.Enabled)
-		err = err2
+		check, err = s.CheckRepo.Add(body.DomainID, body.Type, body.IntervalSeconds, body.Params, body.Enabled)
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to add check")
@@ -1006,10 +929,9 @@ func (s *Server) CreateCheckDirect(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {string} string "check not found"
 // @Router /checks/{id} [put]
 func (s *Server) UpdateCheck(w http.ResponseWriter, r *http.Request) {
-	checkIDStr := chi.URLParam(r, "id")
-	checkID, err := strconv.Atoi(checkIDStr)
-	if err != nil || checkID <= 0 {
-		writeError(w, http.StatusBadRequest, "invalid check id")
+	checkID, err := parseCheckID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -1046,21 +968,9 @@ func (s *Server) UpdateCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	body.Type = strings.ToLower(body.Type)
-	switch body.Type {
-	case "http":
-		if body.Params.Path == "" {
-			body.Params.Path = "/"
-		}
-	case "tcp", "udp":
-		if body.Params.Port <= 0 {
-			writeError(w, http.StatusBadRequest, "port is required for tcp/udp checks")
-			return
-		}
-	case "tls":
-		if body.Params.Port <= 0 {
-			writeError(w, http.StatusBadRequest, "port is required for tls check")
-			return
-		}
+	if err := validateCheckParams(body.Type, &body.Params); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	check, err := s.CheckRepo.UpdateWithRealtime(checkID, body.Type, body.IntervalSeconds, body.Params, body.RealtimeMode, body.RateLimitPerMinute)
@@ -1083,10 +993,9 @@ func (s *Server) UpdateCheck(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {string} string "check not found"
 // @Router /checks/{id}/enable [post]
 func (s *Server) EnableCheck(w http.ResponseWriter, r *http.Request) {
-	checkIDStr := chi.URLParam(r, "id")
-	checkID, err := strconv.Atoi(checkIDStr)
-	if err != nil || checkID <= 0 {
-		writeError(w, http.StatusBadRequest, "invalid check id")
+	checkID, err := parseCheckID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -1115,10 +1024,9 @@ func (s *Server) EnableCheck(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {string} string "check not found"
 // @Router /checks/{id}/disable [post]
 func (s *Server) DisableCheck(w http.ResponseWriter, r *http.Request) {
-	checkIDStr := chi.URLParam(r, "id")
-	checkID, err := strconv.Atoi(checkIDStr)
-	if err != nil || checkID <= 0 {
-		writeError(w, http.StatusBadRequest, "invalid check id")
+	checkID, err := parseCheckID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -1147,10 +1055,9 @@ func (s *Server) DisableCheck(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {string} string "check not found"
 // @Router /checks/{id} [delete]
 func (s *Server) DeleteCheck(w http.ResponseWriter, r *http.Request) {
-	checkIDStr := chi.URLParam(r, "id")
-	checkID, err := strconv.Atoi(checkIDStr)
-	if err != nil || checkID <= 0 {
-		writeError(w, http.StatusBadRequest, "invalid check id")
+	checkID, err := parseCheckID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -1194,6 +1101,8 @@ func (s *Server) GetChecks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, checks)
 }
 
+// --- Dashboard handlers ---
+
 // GetRecentDashboardData godoc
 // @Summary Получить данные для графика на главной странице
 // @Description Возвращает агрегированные данные для всех проверок с пагинацией
@@ -1206,39 +1115,13 @@ func (s *Server) GetChecks(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} models.TimeIntervalResponse
 // @Router /dashboard/recent [get]
 func (s *Server) GetRecentDashboardData(w http.ResponseWriter, r *http.Request) {
-	var from, to *time.Time
-	fromStr := r.URL.Query().Get("from")
-	if fromStr != "" {
-		parsed, err := time.Parse(time.RFC3339, fromStr)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid from parameter, use RFC3339 format")
-			return
-		}
-		from = &parsed
+	from, to, err := parseTimeRange(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
-	toStr := r.URL.Query().Get("to")
-	if toStr != "" {
-		parsed, err := time.Parse(time.RFC3339, toStr)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid to parameter, use RFC3339 format")
-			return
-		}
-		to = &parsed
-	}
-
-	page := 1
-	pageSize := 50
-	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
-	if pageSizeStr := r.URL.Query().Get("page_size"); pageSizeStr != "" {
-		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 {
-			pageSize = ps
-		}
-	}
+	page, pageSize := parsePagination(r, 50)
 
 	data, total, err := s.ResultRepo.GetRecentDataForAllChecks(from, to, page, pageSize)
 	if err != nil {

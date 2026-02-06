@@ -19,6 +19,7 @@ type TLSEvent struct {
 
 type WorkerPool struct {
 	workers          int
+	workersMu        sync.Mutex
 	jobQueue         chan CheckJob
 	tlsEventChan     chan TLSEvent
 	wg               sync.WaitGroup
@@ -26,6 +27,7 @@ type WorkerPool struct {
 	domainRepo       *storage.SQLiteDomainRepo
 	resultRepo       *storage.ResultRepo
 	notificationRepo *storage.NotificationRepo
+	notifSender      *notifications.NotificationSender
 	checkMetrics     map[int]*CheckMetrics
 	metricsMu        sync.RWMutex
 }
@@ -53,6 +55,7 @@ func NewWorkerPool(workers int, domainRepo *storage.SQLiteDomainRepo, resultRepo
 		domainRepo:       domainRepo,
 		resultRepo:       resultRepo,
 		notificationRepo: notificationRepo,
+		notifSender:      notifications.NewNotificationSender(),
 		checkMetrics:     make(map[int]*CheckMetrics),
 	}
 }
@@ -105,15 +108,16 @@ func (wp *WorkerPool) SetWorkers(count int) {
 		count = 1
 	}
 
+	wp.workersMu.Lock()
+	defer wp.workersMu.Unlock()
+
 	if count > wp.workers {
 		for i := wp.workers; i < count; i++ {
 			wp.wg.Add(1)
 			go wp.worker(i)
 		}
-		wp.workers = count
-	} else if count < wp.workers {
-		wp.workers = count
 	}
+	wp.workers = count
 }
 
 func (wp *WorkerPool) worker(_ int) {
@@ -173,12 +177,12 @@ func (wp *WorkerPool) runCheckByType(job CheckJob, timeout time.Duration) *Check
 }
 
 func (wp *WorkerPool) runHTTPCheck(job CheckJob, timeout time.Duration) CheckResult {
-	fullURL := buildHTTPURL(job.Domain.Name, job.Check.Params)
-	method := normalizeHTTPMethod(job.Check.Params.Method)
+	fullURL := BuildHTTPURL(job.Domain.Name, job.Check.Params)
+	method := NormalizeHTTPMethod(job.Check.Params.Method)
 	return RunHTTPCheckWithMethodAndHeaders(fullURL, method, job.Check.Params.Body, job.Check.Params.Headers, timeout)
 }
 
-func buildHTTPURL(domainName string, params models.CheckParams) string {
+func BuildHTTPURL(domainName string, params models.CheckParams) string {
 	path := params.Path
 	if path == "" {
 		path = "/"
@@ -199,7 +203,7 @@ func buildHTTPURL(domainName string, params models.CheckParams) string {
 	return fullURL
 }
 
-func normalizeHTTPMethod(method string) string {
+func NormalizeHTTPMethod(method string) string {
 	if method == "" {
 		return "GET"
 	}
@@ -280,8 +284,6 @@ func (wp *WorkerPool) sendNotifications(job CheckJob, result CheckResult, create
 		CreatedAt:    createdAt,
 	}
 
-	sender := notifications.NewNotificationSender()
-
 	for _, settings := range settingsList {
 		shouldNotify := false
 		notifySlow := false
@@ -300,14 +302,14 @@ func (wp *WorkerPool) sendNotifications(job CheckJob, result CheckResult, create
 		}
 
 		if shouldNotify {
-			sender.SendNotification(settings, msg)
+			wp.notifSender.SendNotification(settings, msg)
 		}
 
 		if notifySlow {
 			slowMsg := msg
 			slowMsg.Status = "slow_response"
 			slowMsg.ErrorMessage = fmt.Sprintf("Response time %d ms exceeds threshold of %d ms", result.DurationMS, settings.SlowResponseThreshold)
-			sender.SendNotification(settings, slowMsg)
+			wp.notifSender.SendNotification(settings, slowMsg)
 		}
 	}
 }

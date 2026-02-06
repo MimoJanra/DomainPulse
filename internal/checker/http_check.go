@@ -18,8 +18,6 @@ type CheckResult struct {
 	Headers      map[string]string
 }
 
-type HTTPResult = CheckResult
-
 func RunHTTPCheckWithMethod(url string, method string, body string, timeout time.Duration) CheckResult {
 	return RunHTTPCheckWithMethodAndHeaders(url, method, body, nil, timeout)
 }

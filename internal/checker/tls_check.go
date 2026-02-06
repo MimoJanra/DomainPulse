@@ -3,6 +3,7 @@ package checker
 import (
 	"crypto/tls"
 	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"time"
@@ -42,15 +43,12 @@ func runTLSCheckWithSNI(host, serverName string, port int, timeout time.Duration
 			ErrorMessage: fmt.Sprintf("TLS connection failed: %v", err),
 		}
 	}
-
-	if err := conn.Close(); err != nil {
-		return CheckResult{
-			Status:       "success",
-			DurationMS:   int(duration),
-			Outcome:      "success",
-			ErrorMessage: "",
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("failed to close TLS connection: %v", err)
 		}
-	}
+	}()
+
 	return CheckResult{
 		Status:       "success",
 		DurationMS:   int(duration),

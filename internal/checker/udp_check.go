@@ -60,7 +60,13 @@ func RunUDPCheck(host string, port int, payload string, timeout time.Duration) C
 	buffer := make([]byte, 1024)
 	err = conn.SetReadDeadline(time.Now().Add(timeout))
 	if err != nil {
-		return CheckResult{}
+		duration := time.Since(start).Milliseconds()
+		return CheckResult{
+			Status:       "error",
+			DurationMS:   int(duration),
+			Outcome:      "error",
+			ErrorMessage: fmt.Sprintf("failed to set read deadline: %v", err),
+		}
 	}
 	_, err = conn.Read(buffer)
 	duration := time.Since(start).Milliseconds()

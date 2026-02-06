@@ -14,6 +14,31 @@ type CheckRepo struct {
 
 func NewCheckRepo(db *sql.DB) *CheckRepo { return &CheckRepo{db: db} }
 
+type checkScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanCheck(s checkScanner) (models.Check, error) {
+	var (
+		c               models.Check
+		paramsJSON      string
+		enabledInt      int
+		realtimeInt     int
+		rateLimitPerMin int
+	)
+	if err := s.Scan(&c.ID, &c.DomainID, &c.Type, &c.Path, &c.IntervalSeconds, &paramsJSON, &enabledInt, &realtimeInt, &rateLimitPerMin); err != nil {
+		return models.Check{}, err
+	}
+	c.Params = parseParams(paramsJSON)
+	c.Enabled = enabledInt == 1
+	c.RealtimeMode = realtimeInt == 1
+	c.RateLimitPerMinute = rateLimitPerMin
+	if c.Params.Path == "" && c.Path != "" {
+		c.Params.Path = c.Path
+	}
+	return c, nil
+}
+
 func (r *CheckRepo) Add(domainID int, checkType string, intervalSeconds int, params models.CheckParams, enabled bool) (models.Check, error) {
 	return r.AddWithRealtime(domainID, checkType, intervalSeconds, params, enabled, false, 0)
 }
@@ -29,14 +54,8 @@ func (r *CheckRepo) AddWithRealtime(domainID int, checkType string, intervalSeco
 	}
 
 	path := params.Path
-	enabledInt := 0
-	if enabled {
-		enabledInt = 1
-	}
-	realtimeInt := 0
-	if realtimeMode {
-		realtimeInt = 1
-	}
+	enabledInt := boolToInt(enabled)
+	realtimeInt := boolToInt(realtimeMode)
 
 	res, err := r.db.Exec(
 		"INSERT INTO checks(domain_id, type, path, interval_seconds, params, enabled, realtime_mode, rate_limit_per_minute) VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
@@ -45,16 +64,19 @@ func (r *CheckRepo) AddWithRealtime(domainID int, checkType string, intervalSeco
 	if err != nil {
 		return models.Check{}, err
 	}
-	id, _ := res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return models.Check{}, fmt.Errorf("last insert id: %w", err)
+	}
 	return models.Check{
-		ID:                int(id),
-		DomainID:          domainID,
-		Type:              checkType,
-		Path:              path,
-		IntervalSeconds:   intervalSeconds,
-		Params:            params,
-		Enabled:           enabled,
-		RealtimeMode:      realtimeMode,
+		ID:                 int(id),
+		DomainID:           domainID,
+		Type:               checkType,
+		Path:               path,
+		IntervalSeconds:    intervalSeconds,
+		Params:             params,
+		Enabled:            enabled,
+		RealtimeMode:       realtimeMode,
 		RateLimitPerMinute: rateLimitPerMinute,
 	}, nil
 }
@@ -68,22 +90,9 @@ func (r *CheckRepo) GetByDomainID(domainID int) ([]models.Check, error) {
 
 	var checks []models.Check
 	for rows.Next() {
-		var (
-			c                models.Check
-			paramsJSON       string
-			enabledInt       int
-			realtimeInt      int
-			rateLimitPerMin  int
-		)
-		if err := rows.Scan(&c.ID, &c.DomainID, &c.Type, &c.Path, &c.IntervalSeconds, &paramsJSON, &enabledInt, &realtimeInt, &rateLimitPerMin); err != nil {
+		c, err := scanCheck(rows)
+		if err != nil {
 			return nil, err
-		}
-		c.Params = parseParams(paramsJSON)
-		c.Enabled = enabledInt == 1
-		c.RealtimeMode = realtimeInt == 1
-		c.RateLimitPerMinute = rateLimitPerMin
-		if c.Params.Path == "" && c.Path != "" {
-			c.Params.Path = c.Path
 		}
 		checks = append(checks, c)
 	}
@@ -106,22 +115,9 @@ func (r *CheckRepo) GetAll(domainID *int) ([]models.Check, error) {
 
 	var checks []models.Check
 	for rows.Next() {
-		var (
-			c                models.Check
-			paramsJSON       string
-			enabledInt       int
-			realtimeInt      int
-			rateLimitPerMin  int
-		)
-		if err := rows.Scan(&c.ID, &c.DomainID, &c.Type, &c.Path, &c.IntervalSeconds, &paramsJSON, &enabledInt, &realtimeInt, &rateLimitPerMin); err != nil {
+		c, err := scanCheck(rows)
+		if err != nil {
 			return nil, err
-		}
-		c.Params = parseParams(paramsJSON)
-		c.Enabled = enabledInt == 1
-		c.RealtimeMode = realtimeInt == 1
-		c.RateLimitPerMinute = rateLimitPerMin
-		if c.Params.Path == "" && c.Path != "" {
-			c.Params.Path = c.Path
 		}
 		checks = append(checks, c)
 	}
@@ -130,25 +126,7 @@ func (r *CheckRepo) GetAll(domainID *int) ([]models.Check, error) {
 
 func (r *CheckRepo) GetByID(id int) (models.Check, error) {
 	row := r.db.QueryRow("SELECT id, domain_id, type, path, interval_seconds, params, enabled, realtime_mode, rate_limit_per_minute FROM checks WHERE id = ?", id)
-	var (
-		c                models.Check
-		paramsJSON       string
-		enabledInt       int
-		realtimeInt      int
-		rateLimitPerMin  int
-	)
-	err := row.Scan(&c.ID, &c.DomainID, &c.Type, &c.Path, &c.IntervalSeconds, &paramsJSON, &enabledInt, &realtimeInt, &rateLimitPerMin)
-	if err != nil {
-		return models.Check{}, err
-	}
-	c.Params = parseParams(paramsJSON)
-	c.Enabled = enabledInt == 1
-	c.RealtimeMode = realtimeInt == 1
-	c.RateLimitPerMinute = rateLimitPerMin
-	if c.Params.Path == "" && c.Path != "" {
-		c.Params.Path = c.Path
-	}
-	return c, nil
+	return scanCheck(row)
 }
 
 func (r *CheckRepo) Update(id int, checkType string, intervalSeconds int, params models.CheckParams) (models.Check, error) {
@@ -162,10 +140,7 @@ func (r *CheckRepo) UpdateWithRealtime(id int, checkType string, intervalSeconds
 	}
 
 	path := params.Path
-	realtimeInt := 0
-	if realtimeMode {
-		realtimeInt = 1
-	}
+	realtimeInt := boolToInt(realtimeMode)
 
 	_, err = r.db.Exec(
 		"UPDATE checks SET type = ?, path = ?, interval_seconds = ?, params = ?, realtime_mode = ?, rate_limit_per_minute = ? WHERE id = ?",
@@ -179,10 +154,7 @@ func (r *CheckRepo) UpdateWithRealtime(id int, checkType string, intervalSeconds
 }
 
 func (r *CheckRepo) SetEnabled(id int, enabled bool) error {
-	enabledInt := 0
-	if enabled {
-		enabledInt = 1
-	}
+	enabledInt := boolToInt(enabled)
 	_, err := r.db.Exec("UPDATE checks SET enabled = ? WHERE id = ?", enabledInt, id)
 	return err
 }
@@ -201,4 +173,11 @@ func parseParams(raw string) models.CheckParams {
 		return models.CheckParams{}
 	}
 	return params
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

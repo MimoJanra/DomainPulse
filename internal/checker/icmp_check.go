@@ -28,6 +28,7 @@ func RunICMPCheck(host string, timeout time.Duration) CheckResult {
 	case result := <-done:
 		return result
 	case <-ctx.Done():
+		pinger.Stop()
 		return createICPTimeoutResult(start, "ping timeout exceeded")
 	}
 }

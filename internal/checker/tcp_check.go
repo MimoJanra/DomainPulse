@@ -30,24 +30,21 @@ func RunTCPCheckWithPayload(host string, port int, payload string, timeout time.
 			ErrorMessage: fmt.Sprintf("TCP connection failed: %v", err),
 		}
 	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("failed to close TCP connection: %v", err)
+		}
+	}()
 
 	if payload != "" {
-		if _, err := conn.Write([]byte(payload)); err != nil {
-			err := conn.Close()
-			if err != nil {
-				return CheckResult{}
-			}
+		if _, writeErr := conn.Write([]byte(payload)); writeErr != nil {
 			return CheckResult{
 				Status:       "error",
 				DurationMS:   int(duration),
 				Outcome:      "error",
-				ErrorMessage: fmt.Sprintf("TCP write failed: %v", err),
+				ErrorMessage: fmt.Sprintf("TCP write failed: %v", writeErr),
 			}
 		}
-	}
-
-	if err := conn.Close(); err != nil {
-		log.Printf("failed to close TCP connection: %v", err)
 	}
 
 	return CheckResult{

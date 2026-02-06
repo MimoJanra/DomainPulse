@@ -3,6 +3,7 @@ package storage
 import (
 	"database/sql"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/MimoJanra/DomainPulse/internal/models"
@@ -214,27 +215,17 @@ func calculateLatencyStats(durations []int) models.LatencyStats {
 
 	sorted := make([]int, len(durations))
 	copy(sorted, durations)
-	for i := 0; i < len(sorted)-1; i++ {
-		for j := i + 1; j < len(sorted); j++ {
-			if sorted[i] > sorted[j] {
-				sorted[i], sorted[j] = sorted[j], sorted[i]
-			}
-		}
-	}
+	sort.Ints(sorted)
 
 	var sum int
-	min, max := sorted[0], sorted[0]
 	for _, d := range sorted {
 		sum += d
-		if d < min {
-			min = d
-		}
-		if d > max {
-			max = d
-		}
 	}
 
+	min := sorted[0]
+	max := sorted[len(sorted)-1]
 	avg := float64(sum) / float64(len(sorted))
+
 	median := float64(sorted[len(sorted)/2])
 	if len(sorted)%2 == 0 {
 		median = float64(sorted[len(sorted)/2-1]+sorted[len(sorted)/2]) / 2.0
@@ -260,6 +251,52 @@ func calculateLatencyStats(durations []int) models.LatencyStats {
 		P95:    p95,
 		P99:    p99,
 	}
+}
+
+// buildTimeFilter appends time range conditions to query and args.
+func buildTimeFilter(query string, args []any, from, to *time.Time) (string, []any) {
+	if from != nil {
+		query += " AND datetime(created_at) >= datetime(?)"
+		args = append(args, from.Format(time.RFC3339))
+	}
+	if to != nil {
+		query += " AND datetime(created_at) <= datetime(?)"
+		args = append(args, to.Format(time.RFC3339))
+	}
+	return query, args
+}
+
+// fetchStatusDistributions fetches all status distributions for the given time buckets in a single query,
+// eliminating the N+1 query pattern.
+func (r *ResultRepo) fetchStatusDistributions(timeTruncate string, checkIDFilter string, args []any, from, to *time.Time) (map[string]map[string]int, error) {
+	statusQuery := fmt.Sprintf(`
+		SELECT %s as time_bucket, status, COUNT(*)
+		FROM results
+		WHERE %s
+	`, timeTruncate, checkIDFilter)
+
+	statusQuery, args = buildTimeFilter(statusQuery, args, from, to)
+	statusQuery += " GROUP BY time_bucket, status"
+
+	rows, err := r.db.Query(statusQuery, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]map[string]int)
+	for rows.Next() {
+		var bucket, status string
+		var count int
+		if err := rows.Scan(&bucket, &status, &count); err != nil {
+			return nil, err
+		}
+		if result[bucket] == nil {
+			result[bucket] = make(map[string]int)
+		}
+		result[bucket][status] = count
+	}
+	return result, rows.Err()
 }
 
 func (r *ResultRepo) GetByTimeInterval(checkID int, interval string, from, to *time.Time, page, pageSize int) ([]models.TimeIntervalData, int, error) {
@@ -288,7 +325,7 @@ func (r *ResultRepo) GetByTimeInterval(checkID int, interval string, from, to *t
 	}
 
 	query := fmt.Sprintf(`
-		SELECT 
+		SELECT
 			%s as time_bucket,
 			COUNT(*) as count,
 			SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count,
@@ -301,15 +338,7 @@ func (r *ResultRepo) GetByTimeInterval(checkID int, interval string, from, to *t
 	`, timeTruncate)
 
 	args := []any{checkID}
-
-	if from != nil {
-		query += " AND datetime(created_at) >= datetime(?)"
-		args = append(args, from.Format(time.RFC3339))
-	}
-	if to != nil {
-		query += " AND datetime(created_at) <= datetime(?)"
-		args = append(args, to.Format(time.RFC3339))
-	}
+	query, args = buildTimeFilter(query, args, from, to)
 
 	query += " GROUP BY time_bucket ORDER BY time_bucket ASC LIMIT ? OFFSET ?"
 	args = append(args, pageSize, offset)
@@ -338,48 +367,22 @@ func (r *ResultRepo) GetByTimeInterval(checkID int, interval string, from, to *t
 			data.AvgLatency = avgLatency.Float64
 		}
 		data.StatusDistribution = make(map[string]int)
-
-		statusQuery := fmt.Sprintf(`
-			SELECT status, COUNT(*) 
-			FROM results 
-			WHERE check_id = ? AND %s = ?
-		`, timeTruncate)
-		statusArgs := []any{checkID, timestamp}
-		if from != nil {
-			statusQuery += " AND datetime(created_at) >= datetime(?)"
-			statusArgs = append(statusArgs, from.Format(time.RFC3339))
-		}
-		if to != nil {
-			statusQuery += " AND datetime(created_at) <= datetime(?)"
-			statusArgs = append(statusArgs, to.Format(time.RFC3339))
-		}
-		statusQuery += " GROUP BY status"
-
-		statusRows, err := r.db.Query(statusQuery, statusArgs...)
-		if err == nil {
-			for statusRows.Next() {
-				var status string
-				var count int
-				if err := statusRows.Scan(&status, &count); err == nil {
-					data.StatusDistribution[status] = count
-				}
-			}
-			statusRows.Close()
-		}
-
 		results = append(results, data)
+	}
+
+	// Fetch all status distributions in one query instead of N+1
+	statusDists, err := r.fetchStatusDistributions(timeTruncate, "check_id = ?", []any{checkID}, from, to)
+	if err == nil {
+		for i := range results {
+			if dist, ok := statusDists[results[i].Timestamp]; ok {
+				results[i].StatusDistribution = dist
+			}
+		}
 	}
 
 	countQuery := fmt.Sprintf("SELECT COUNT(DISTINCT %s) FROM results WHERE check_id = ?", timeTruncate)
 	countArgs := []any{checkID}
-	if from != nil {
-		countQuery += " AND datetime(created_at) >= datetime(?)"
-		countArgs = append(countArgs, from.Format(time.RFC3339))
-	}
-	if to != nil {
-		countQuery += " AND datetime(created_at) <= datetime(?)"
-		countArgs = append(countArgs, to.Format(time.RFC3339))
-	}
+	countQuery, countArgs = buildTimeFilter(countQuery, countArgs, from, to)
 
 	var total int
 	err = r.db.QueryRow(countQuery, countArgs...).Scan(&total)
@@ -409,7 +412,7 @@ func (r *ResultRepo) GetRecentDataForAllChecks(from, to *time.Time, page, pageSi
 	timeTruncate := "strftime('%Y-%m-%d %H:%M:00', created_at)"
 
 	query := fmt.Sprintf(`
-		SELECT 
+		SELECT
 			%s as time_bucket,
 			COUNT(*) as count,
 			SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count,
@@ -422,14 +425,7 @@ func (r *ResultRepo) GetRecentDataForAllChecks(from, to *time.Time, page, pageSi
 	`, timeTruncate)
 
 	args := []any{}
-	if from != nil {
-		query += " AND datetime(created_at) >= datetime(?)"
-		args = append(args, from.Format(time.RFC3339))
-	}
-	if to != nil {
-		query += " AND datetime(created_at) <= datetime(?)"
-		args = append(args, to.Format(time.RFC3339))
-	}
+	query, args = buildTimeFilter(query, args, from, to)
 
 	query += " GROUP BY time_bucket ORDER BY time_bucket ASC LIMIT ? OFFSET ?"
 	args = append(args, pageSize, offset)
@@ -458,48 +454,22 @@ func (r *ResultRepo) GetRecentDataForAllChecks(from, to *time.Time, page, pageSi
 			data.AvgLatency = avgLatency.Float64
 		}
 		data.StatusDistribution = make(map[string]int)
-
-		statusQuery := fmt.Sprintf(`
-			SELECT status, COUNT(*) 
-			FROM results 
-			WHERE %s = ?
-		`, timeTruncate)
-		statusArgs := []any{timestamp}
-		if from != nil {
-			statusQuery += " AND datetime(created_at) >= datetime(?)"
-			statusArgs = append(statusArgs, from.Format(time.RFC3339))
-		}
-		if to != nil {
-			statusQuery += " AND datetime(created_at) <= datetime(?)"
-			statusArgs = append(statusArgs, to.Format(time.RFC3339))
-		}
-		statusQuery += " GROUP BY status"
-
-		statusRows, err := r.db.Query(statusQuery, statusArgs...)
-		if err == nil {
-			for statusRows.Next() {
-				var status string
-				var count int
-				if err := statusRows.Scan(&status, &count); err == nil {
-					data.StatusDistribution[status] = count
-				}
-			}
-			statusRows.Close()
-		}
-
 		results = append(results, data)
+	}
+
+	// Fetch all status distributions in one query instead of N+1
+	statusDists, err := r.fetchStatusDistributions(timeTruncate, "1=1", []any{}, from, to)
+	if err == nil {
+		for i := range results {
+			if dist, ok := statusDists[results[i].Timestamp]; ok {
+				results[i].StatusDistribution = dist
+			}
+		}
 	}
 
 	countQuery := "SELECT COUNT(DISTINCT " + timeTruncate + ") FROM results WHERE 1=1"
 	countArgs := []any{}
-	if from != nil {
-		countQuery += " AND datetime(created_at) >= datetime(?)"
-		countArgs = append(countArgs, from.Format(time.RFC3339))
-	}
-	if to != nil {
-		countQuery += " AND datetime(created_at) <= datetime(?)"
-		countArgs = append(countArgs, to.Format(time.RFC3339))
-	}
+	countQuery, countArgs = buildTimeFilter(countQuery, countArgs, from, to)
 
 	var total int
 	err = r.db.QueryRow(countQuery, countArgs...).Scan(&total)

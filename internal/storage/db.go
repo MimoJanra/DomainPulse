@@ -82,5 +82,8 @@ func InitDB() (*sql.DB, error) {
 	_, _ = db.Exec(`ALTER TABLE notification_settings ADD COLUMN notify_on_slow_response INTEGER NOT NULL DEFAULT 0`)
 	_, _ = db.Exec(`ALTER TABLE notification_settings ADD COLUMN slow_response_threshold_ms INTEGER NOT NULL DEFAULT 0`)
 
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_results_check_created ON results(check_id, created_at)`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_checks_domain ON checks(domain_id)`)
+
 	return db, nil
 }

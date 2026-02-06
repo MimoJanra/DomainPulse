@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/MimoJanra/DomainPulse/internal/api"
 	"github.com/MimoJanra/DomainPulse/internal/checker"
@@ -42,7 +44,6 @@ func main() {
 	scheduler := checker.NewScheduler(checkRepo, domainRepo, resultRepo, notificationRepo, workerCount)
 
 	scheduler.Start()
-	defer scheduler.Stop()
 
 	server := &api.Server{
 		DomainRepo:       domainRepo,
@@ -53,18 +54,31 @@ func main() {
 
 	r := api.SetupRouter(server)
 
+	srv := &http.Server{
+		Addr:    ":8080",
+		Handler: r,
+	}
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		log.Println("Server started on :8080")
-		if err := http.ListenAndServe(":8080", r); err != nil {
-			log.Fatal(err)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("HTTP server error: %v", err)
 		}
 	}()
 
 	<-sigChan
 	log.Println("Shutting down server...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("HTTP server shutdown error: %v", err)
+	}
+
 	scheduler.Stop()
 	log.Println("Server stopped")
 }

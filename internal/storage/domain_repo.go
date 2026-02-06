@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 
 	"github.com/MimoJanra/DomainPulse/internal/models"
@@ -50,7 +51,10 @@ func (r *SQLiteDomainRepo) Add(name string) (models.Domain, error) {
 	if err != nil {
 		return models.Domain{}, err
 	}
-	id, _ := res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err != nil {
+		return models.Domain{}, fmt.Errorf("last insert id: %w", err)
+	}
 	return models.Domain{ID: int(id), Name: name}, nil
 }
 
@@ -59,6 +63,9 @@ func (r *SQLiteDomainRepo) DeleteByID(id int) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	rows, _ := res.RowsAffected()
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("rows affected: %w", err)
+	}
 	return rows > 0, nil
 }
