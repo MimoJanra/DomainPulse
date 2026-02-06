@@ -9,21 +9,528 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "termsOfService": "http://swagger.io/terms/",
-        "contact": {
-            "name": "API Support",
-            "url": "http://www.swagger.io/support",
-            "email": "support@swagger.io"
-        },
-        "license": {
-            "name": "Apache 2.0",
-            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
-        },
+        "contact": {},
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/checks": {
+            "get": {
+                "description": "Возвращает список проверок с опциональной фильтрацией по domain_id",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "checks"
+                ],
+                "summary": "Получить список проверок",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID домена для фильтрации",
+                        "name": "domain_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Создает новую проверку (http, icmp, tcp, udp) с указанием domain_id в теле запроса",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "checks"
+                ],
+                "summary": "Создать проверку",
+                "parameters": [
+                    {
+                        "description": "Параметры проверки",
+                        "name": "check",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request body",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/checks/{id}": {
+            "put": {
+                "description": "Обновляет параметры проверки",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "checks"
+                ],
+                "summary": "Редактировать проверку",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID проверки",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Параметры проверки",
+                        "name": "check",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request body",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "check not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Удаляет проверку по ID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "checks"
+                ],
+                "summary": "Удалить проверку",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID проверки",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "integer"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "invalid check id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "check not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/checks/{id}/disable": {
+            "post": {
+                "description": "Отключает проверку от выполнения",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "checks"
+                ],
+                "summary": "Отключить проверку",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID проверки",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "invalid check id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "check not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/checks/{id}/enable": {
+            "post": {
+                "description": "Включает проверку для выполнения",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "checks"
+                ],
+                "summary": "Включить проверку",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID проверки",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "invalid check id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "check not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/checks/{id}/intervals": {
+            "get": {
+                "description": "Возвращает данные, агрегированные по тайм-интервалам (1m, 5m, 1h) для построения графиков с пагинацией",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "results"
+                ],
+                "summary": "Получить агрегированные данные по тайм-интервалам",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID проверки",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "1m",
+                            "5m",
+                            "1h"
+                        ],
+                        "type": "string",
+                        "description": "Интервал агрегации",
+                        "name": "interval",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Начало периода",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Конец периода",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Номер страницы",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Размер страницы",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid check id, interval or parameters",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "check not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/checks/{id}/results": {
+            "get": {
+                "description": "Возвращает список результатов для конкретной проверки с фильтрацией по периоду и пагинацией\nВозвращает список результатов для конкретной проверки с фильтрацией по периоду и пагинацией",
+                "produces": [
+                    "application/json",
+                    "application/json"
+                ],
+                "tags": [
+                    "results",
+                    "results"
+                ],
+                "summary": "Получить результаты проверки",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID проверки",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Начало периода",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Конец периода",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Номер страницы",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Размер страницы",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "ID проверки",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Начало периода",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Конец периода",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Номер страницы",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Размер страницы",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.ResultsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid check id or parameters",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/checks/{id}/stats": {
+            "get": {
+                "description": "Возвращает агрегированную статистику: распределение по статусам и статистику latency",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "results"
+                ],
+                "summary": "Получить статистику проверки",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID проверки",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Начало периода",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Конец периода",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.StatsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid check id or parameters",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "check not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/dashboard/recent": {
+            "get": {
+                "description": "Возвращает агрегированные данные для всех проверок с пагинацией",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "results"
+                ],
+                "summary": "Получить данные для графика на главной странице",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Начало периода (RFC3339)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Конец периода (RFC3339)",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Номер страницы",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Размер страницы",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/domains": {
             "get": {
                 "description": "Возвращает список всех доменов в системе",
@@ -40,14 +547,14 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.Domain"
+                                "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Domain"
                             }
                         }
                     }
                 }
             },
             "post": {
-                "description": "Добавляет домен для мониторинга",
+                "description": "Добавляет домен (example.com) или IP (IPv4/IPv6) для мониторинга",
                 "consumes": [
                     "application/json"
                 ],
@@ -57,10 +564,10 @@ const docTemplate = `{
                 "tags": [
                     "domains"
                 ],
-                "summary": "Добавить новый домен",
+                "summary": "Добавить домен или IP",
                 "parameters": [
                     {
-                        "description": "Данные домена",
+                        "description": "Данные: name — домен или IP",
                         "name": "domain",
                         "in": "body",
                         "required": true,
@@ -73,7 +580,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.Domain"
+                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Domain"
                         }
                     },
                     "400": {
@@ -148,7 +655,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.Check"
+                                "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check"
                             }
                         }
                     },
@@ -161,7 +668,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Добавляет новую HTTP-проверку для домена",
+                "description": "Добавляет новую проверку (http, icmp, tcp, udp) для домена",
                 "consumes": [
                     "application/json"
                 ],
@@ -194,13 +701,260 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.Check"
+                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check"
                         }
                     },
                     "400": {
                         "description": "invalid request body",
                         "schema": {
                             "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications": {
+            "get": {
+                "description": "Возвращает список всех настроек уведомлений",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Получить настройки уведомлений",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Создает новую настройку уведомлений для Telegram или Slack",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Создать настройки уведомлений",
+                "parameters": [
+                    {
+                        "description": "Настройки уведомлений",
+                        "name": "settings",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request body",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/{id}": {
+            "put": {
+                "description": "Обновляет настройки уведомлений по ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Обновить настройки уведомлений",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID настроек",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Настройки уведомлений",
+                        "name": "settings",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request body",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "notification settings not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Удаляет настройки уведомлений по ID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Удалить настройки уведомлений",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID настроек",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "integer"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "notification settings not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/{id}/disable": {
+            "post": {
+                "description": "Отключает настройки уведомлений",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Отключить уведомления",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID настроек",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "notification settings not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/{id}/enable": {
+            "post": {
+                "description": "Включает настройки уведомлений",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "summary": "Включить уведомления",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID настроек",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "notification settings not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/results": {
+            "get": {
+                "description": "Возвращает список всех результатов проверок\nВозвращает список всех результатов проверок",
+                "produces": [
+                    "application/json",
+                    "application/json"
+                ],
+                "tags": [
+                    "results",
+                    "results"
+                ],
+                "summary": "Получить результаты проверок",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Result"
+                            }
                         }
                     }
                 }
@@ -229,24 +983,39 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "models.Check": {
+        "github_com_MimoJanra_DomainPulse_internal_models.Check": {
             "type": "object",
             "properties": {
                 "domain_id": {
                     "type": "integer",
                     "example": 1
                 },
-                "frequency": {
-                    "type": "string",
-                    "example": "5m"
+                "enabled": {
+                    "type": "boolean",
+                    "example": true
                 },
                 "id": {
                     "type": "integer",
                     "example": 1
                 },
+                "interval_seconds": {
+                    "type": "integer",
+                    "example": 60
+                },
+                "params": {
+                    "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.CheckParams"
+                },
                 "path": {
                     "type": "string",
                     "example": "/"
+                },
+                "rate_limit_per_minute": {
+                    "type": "integer",
+                    "example": 60
+                },
+                "realtime_mode": {
+                    "type": "boolean",
+                    "example": false
                 },
                 "type": {
                     "type": "string",
@@ -254,7 +1023,50 @@ const docTemplate = `{
                 }
             }
         },
-        "models.Domain": {
+        "github_com_MimoJanra_DomainPulse_internal_models.CheckParams": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string",
+                    "example": ""
+                },
+                "headers": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    },
+                    "example": {
+                        " \"X-Custom-Header\"": " \"value\"}",
+                        "{\"Authorization\"": " \"Bearer token\""
+                    }
+                },
+                "method": {
+                    "type": "string",
+                    "example": "GET"
+                },
+                "path": {
+                    "type": "string",
+                    "example": "/health"
+                },
+                "payload": {
+                    "type": "string",
+                    "example": "ping"
+                },
+                "port": {
+                    "type": "integer",
+                    "example": 80
+                },
+                "scheme": {
+                    "type": "string",
+                    "example": "https"
+                },
+                "timeout_ms": {
+                    "type": "integer",
+                    "example": 5000
+                }
+            }
+        },
+        "github_com_MimoJanra_DomainPulse_internal_models.Domain": {
             "type": "object",
             "properties": {
                 "id": {
@@ -266,18 +1078,236 @@ const docTemplate = `{
                     "example": "example.com"
                 }
             }
+        },
+        "github_com_MimoJanra_DomainPulse_internal_models.LatencyStats": {
+            "type": "object",
+            "properties": {
+                "avg": {
+                    "type": "number",
+                    "example": 150.5
+                },
+                "max": {
+                    "type": "integer",
+                    "example": 500
+                },
+                "median": {
+                    "type": "number",
+                    "example": 145
+                },
+                "min": {
+                    "type": "integer",
+                    "example": 50
+                },
+                "p95": {
+                    "type": "number",
+                    "example": 300
+                },
+                "p99": {
+                    "type": "number",
+                    "example": 450
+                }
+            }
+        },
+        "github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings": {
+            "type": "object",
+            "properties": {
+                "chat_id": {
+                    "type": "string",
+                    "example": "-1001234567890"
+                },
+                "enabled": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "notify_on_failure": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "notify_on_slow_response": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "notify_on_success": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "slow_response_threshold_ms": {
+                    "type": "integer",
+                    "example": 1000
+                },
+                "token": {
+                    "type": "string",
+                    "example": "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "telegram"
+                },
+                "webhook_url": {
+                    "type": "string",
+                    "example": "https://hooks.slack.com/services/..."
+                }
+            }
+        },
+        "github_com_MimoJanra_DomainPulse_internal_models.Result": {
+            "type": "object",
+            "properties": {
+                "check_id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "created_at": {
+                    "type": "string",
+                    "example": "2024-01-01T12:00:00Z"
+                },
+                "duration_ms": {
+                    "type": "integer",
+                    "example": 150
+                },
+                "error_message": {
+                    "type": "string",
+                    "example": ""
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "outcome": {
+                    "type": "string",
+                    "example": "2xx"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "success"
+                },
+                "status_code": {
+                    "type": "integer",
+                    "example": 200
+                }
+            }
+        },
+        "github_com_MimoJanra_DomainPulse_internal_models.ResultsResponse": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "results": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Result"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_MimoJanra_DomainPulse_internal_models.StatsResponse": {
+            "type": "object",
+            "properties": {
+                "latency_stats": {
+                    "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.LatencyStats"
+                },
+                "status_distribution": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "total_results": {
+                    "type": "integer",
+                    "example": 1000
+                }
+            }
+        },
+        "github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalData": {
+            "type": "object",
+            "properties": {
+                "avg_latency": {
+                    "type": "number",
+                    "example": 150.5
+                },
+                "count": {
+                    "type": "integer",
+                    "example": 60
+                },
+                "failure_count": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "max_latency": {
+                    "type": "integer",
+                    "example": 500
+                },
+                "min_latency": {
+                    "type": "integer",
+                    "example": 50
+                },
+                "status_distribution": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "success_count": {
+                    "type": "integer",
+                    "example": 58
+                },
+                "timestamp": {
+                    "type": "string",
+                    "example": "2024-01-01 12:00:00"
+                }
+            }
+        },
+        "github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalData"
+                    }
+                },
+                "interval": {
+                    "type": "string",
+                    "example": "1m"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
+                }
+            }
         }
     }
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "1.0",
-	Host:             "localhost:8080",
-	BasePath:         "/",
-	Schemes:          []string{"http"},
-	Title:            "DomainPulse API",
-	Description:      "REST API для мониторинга доменов и HTTP-проверок.",
+	Version:          "",
+	Host:             "",
+	BasePath:         "",
+	Schemes:          []string{},
+	Title:            "",
+	Description:      "",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

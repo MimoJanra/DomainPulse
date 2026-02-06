@@ -12,9 +12,15 @@ import (
 	"github.com/MimoJanra/DomainPulse/internal/storage"
 )
 
+type TLSEvent struct {
+	Job    CheckJob
+	Result CheckResult
+}
+
 type WorkerPool struct {
 	workers          int
 	jobQueue         chan CheckJob
+	tlsEventChan     chan TLSEvent
 	wg               sync.WaitGroup
 	stopChan         chan struct{}
 	domainRepo       *storage.SQLiteDomainRepo
@@ -42,6 +48,7 @@ func NewWorkerPool(workers int, domainRepo *storage.SQLiteDomainRepo, resultRepo
 	return &WorkerPool{
 		workers:          workers,
 		jobQueue:         make(chan CheckJob, 100),
+		tlsEventChan:     make(chan TLSEvent, 50),
 		stopChan:         make(chan struct{}),
 		domainRepo:       domainRepo,
 		resultRepo:       resultRepo,
@@ -55,10 +62,13 @@ func (wp *WorkerPool) Start() {
 		wp.wg.Add(1)
 		go wp.worker(i)
 	}
+	wp.wg.Add(1)
+	go wp.tlsEventProcessor()
 }
 
 func (wp *WorkerPool) Stop() {
 	close(wp.stopChan)
+	close(wp.tlsEventChan)
 	close(wp.jobQueue)
 	wp.wg.Wait()
 }
@@ -70,6 +80,23 @@ func (wp *WorkerPool) Submit(job CheckJob) {
 		return
 	default:
 		log.Printf("worker pool queue full, dropping job for check %d", job.Check.ID)
+	}
+}
+
+func (wp *WorkerPool) SubmitTLSEvent(job CheckJob, result CheckResult) {
+	select {
+	case wp.tlsEventChan <- TLSEvent{Job: job, Result: result}:
+	case <-wp.stopChan:
+	default:
+		log.Printf("tls event queue full, dropping event for check %d", job.Check.ID)
+	}
+}
+
+func (wp *WorkerPool) tlsEventProcessor() {
+	defer wp.wg.Done()
+	for ev := range wp.tlsEventChan {
+		wp.saveResult(ev.Job, ev.Result, 0)
+		wp.sendNotifications(ev.Job, ev.Result, time.Now().Format(time.RFC3339))
 	}
 }
 
@@ -137,6 +164,8 @@ func (wp *WorkerPool) runCheckByType(job CheckJob, timeout time.Duration) *Check
 		return wp.runTCPCheck(job, timeout)
 	case "udp":
 		return wp.runUDPCheck(job, timeout)
+	case "tls":
+		return wp.runTLSCheck(job, timeout)
 	default:
 		log.Printf("unsupported check type: %s for check %d", job.Check.Type, job.Check.ID)
 		return nil
@@ -194,6 +223,16 @@ func (wp *WorkerPool) runUDPCheck(job CheckJob, timeout time.Duration) *CheckRes
 		return nil
 	}
 	result := RunUDPCheck(job.Domain.Name, port, job.Check.Params.Payload, timeout)
+	return &result
+}
+
+func (wp *WorkerPool) runTLSCheck(job CheckJob, timeout time.Duration) *CheckResult {
+	port := job.Check.Params.Port
+	if port <= 0 {
+		log.Printf("invalid port for TLS check %d", job.Check.ID)
+		return nil
+	}
+	result := RunTLSCheck(job.Domain.Name, port, timeout)
 	return &result
 }
 

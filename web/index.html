@@ -51,6 +51,7 @@
                         <option value="icmp">ICMP</option>
                         <option value="tcp">TCP</option>
                         <option value="udp">UDP</option>
+                        <option value="tls">TLS (постоянное соединение)</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -83,7 +84,7 @@
                     <textarea id="checkBody" placeholder='{"key": "value"}' rows="3"></textarea>
                 </div>
                 <div class="form-group" id="portParams" style="display: none;">
-                    <label>Порт (для TCP/UDP):</label>
+                    <label>Порт (для TCP/UDP/TLS):</label>
                     <input type="number" id="checkPort" min="1" max="65535">
                 </div>
                 <div class="form-group" id="tcpParams" style="display: none;">
@@ -127,6 +128,7 @@
                         <option value="icmp">ICMP</option>
                         <option value="tcp">TCP</option>
                         <option value="udp">UDP</option>
+                        <option value="tls">TLS (постоянное соединение)</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -159,7 +161,7 @@
                     <textarea id="editCheckBody" placeholder='{"key": "value"}' rows="3"></textarea>
                 </div>
                 <div class="form-group" id="editPortParams" style="display: none;">
-                    <label>Порт (для TCP/UDP):</label>
+                    <label>Порт (для TCP/UDP/TLS):</label>
                     <input type="number" id="editCheckPort" min="1" max="65535">
                 </div>
                 <div class="form-group" id="editTcpParams" style="display: none;">

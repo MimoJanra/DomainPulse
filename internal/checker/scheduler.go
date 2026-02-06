@@ -17,7 +17,8 @@ type Scheduler struct {
 	workerPool       *WorkerPool
 	tickers          map[int]*time.Ticker
 	realtimeLoops    map[int]chan struct{}
-	rateLimiters     map[int]*RateLimiter  
+	tlsLoops         map[int]chan struct{}
+	rateLimiters     map[int]*RateLimiter
 	stopChan         chan struct{}
 	mu               sync.RWMutex
 	running          bool
@@ -41,6 +42,7 @@ func NewScheduler(
 		workerPool:       workerPool,
 		tickers:          make(map[int]*time.Ticker),
 		realtimeLoops:    make(map[int]chan struct{}),
+		tlsLoops:         make(map[int]chan struct{}),
 		rateLimiters:     make(map[int]*RateLimiter),
 		stopChan:         make(chan struct{}),
 	}
@@ -82,6 +84,10 @@ func (s *Scheduler) Stop() {
 		close(stopChan)
 		delete(s.realtimeLoops, id)
 	}
+	for id, ch := range s.tlsLoops {
+		close(ch)
+		delete(s.tlsLoops, id)
+	}
 
 	s.workerPool.Stop()
 
@@ -118,6 +124,31 @@ func (s *Scheduler) scheduleCheck(check models.Check) {
 	if stopChan, exists := s.realtimeLoops[check.ID]; exists {
 		close(stopChan)
 		delete(s.realtimeLoops, check.ID)
+	}
+	if ch, exists := s.tlsLoops[check.ID]; exists {
+		close(ch)
+		delete(s.tlsLoops, check.ID)
+	}
+
+	if check.Type == "tls" {
+		domain, err := s.domainRepo.GetByID(check.DomainID)
+		if err != nil {
+			log.Printf("domain not found for TLS check %d: %v", check.ID, err)
+			return
+		}
+		if check.Params.Port <= 0 {
+			log.Printf("invalid port for TLS check %d", check.ID)
+			return
+		}
+		stopChan := make(chan struct{})
+		s.tlsLoops[check.ID] = stopChan
+		timeout := 10 * time.Second
+		if check.Params.TimeoutMS > 0 {
+			timeout = time.Duration(check.Params.TimeoutMS) * time.Millisecond
+		}
+		job := CheckJob{Check: check, Domain: domain}
+		go s.runTLSPersistentLoop(job, timeout, stopChan)
+		return
 	}
 
 	if check.RealtimeMode && check.RateLimitPerMinute > 0 {
@@ -170,6 +201,13 @@ func (s *Scheduler) runRealtimeCheck(check models.Check, stopChan chan struct{})
 	s.waitForGlobalRateLimit()
 	s.waitForCheckRateLimit(check)
 	s.runCheck(check)
+}
+
+func (s *Scheduler) runTLSPersistentLoop(job CheckJob, timeout time.Duration, stopChan chan struct{}) {
+	onEvent := func(result CheckResult) {
+		s.workerPool.SubmitTLSEvent(job, result)
+	}
+	RunTLSPersistentLoop(job.Domain.Name, job.Check.Params.Port, timeout, onEvent, stopChan)
 }
 
 func (s *Scheduler) waitForGlobalRateLimit() {
@@ -275,7 +313,14 @@ func (s *Scheduler) processChecks(checks []models.Check) map[int]bool {
 func (s *Scheduler) checkNeedsUpdate(check models.Check) bool {
 	hasTicker := s.tickers[check.ID] != nil
 	hasRealtimeLoop := s.realtimeLoops[check.ID] != nil
+	hasTLSLoop := s.tlsLoops[check.ID] != nil
 
+	if check.Type == "tls" {
+		return !hasTLSLoop
+	}
+	if hasTLSLoop {
+		return true
+	}
 	if hasTicker && check.RealtimeMode {
 		return true
 	}
@@ -294,6 +339,10 @@ func (s *Scheduler) unscheduleCheck(checkID int) {
 		close(stopChan)
 		delete(s.realtimeLoops, checkID)
 	}
+	if ch, exists := s.tlsLoops[checkID]; exists {
+		close(ch)
+		delete(s.tlsLoops, checkID)
+	}
 }
 
 func (s *Scheduler) cleanupRemovedChecks(currentCheckIDs map[int]bool) {
@@ -307,6 +356,12 @@ func (s *Scheduler) cleanupRemovedChecks(currentCheckIDs map[int]bool) {
 		if !currentCheckIDs[id] {
 			close(stopChan)
 			delete(s.realtimeLoops, id)
+		}
+	}
+	for id, ch := range s.tlsLoops {
+		if !currentCheckIDs[id] {
+			close(ch)
+			delete(s.tlsLoops, id)
 		}
 	}
 }

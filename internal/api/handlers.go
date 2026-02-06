@@ -45,6 +45,7 @@ var supportedCheckTypes = map[string]struct{}{
 	"icmp": {},
 	"tcp":  {},
 	"udp":  {},
+	"tls":  {},
 }
 
 func validateDomain(raw string) (string, error) {
@@ -237,6 +238,11 @@ func (s *Server) CreateCheck(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "port is required for tcp/udp checks")
 			return
 		}
+	case "tls":
+		if body.Params.Port <= 0 {
+			writeError(w, http.StatusBadRequest, "port is required for tls check")
+			return
+		}
 	}
 
 	var check models.Check
@@ -310,6 +316,8 @@ func (s *Server) executeCheckForDomain(check models.Check, domain models.Domain)
 		return s.runTCPCheckForDomain(domain, check, timeout)
 	case "udp":
 		return s.runUDPCheckForDomain(domain, check, timeout)
+	case "tls":
+		return s.runTLSCheckForDomain(domain, check, timeout)
 	default:
 		log.Printf("check type %s not yet executable, skipping check %d", check.Type, check.ID)
 		return nil
@@ -378,6 +386,16 @@ func (s *Server) runUDPCheckForDomain(domain models.Domain, check models.Check, 
 	return &result
 }
 
+func (s *Server) runTLSCheckForDomain(domain models.Domain, check models.Check, timeout time.Duration) *checker.CheckResult {
+	port := check.Params.Port
+	if port <= 0 {
+		log.Printf("invalid port for TLS check %d", check.ID)
+		return nil
+	}
+	result := checker.RunTLSCheck(domain.Name, port, timeout)
+	return &result
+}
+
 func (s *Server) createResult(check models.Check, resData checker.CheckResult) models.Result {
 	return models.Result{
 		CheckID:      check.ID,
@@ -397,6 +415,13 @@ func (s *Server) createResult(check models.Check, resData checker.CheckResult) m
 // @Produce json
 // @Success 200 {array} models.Result
 // @Router /results [get]
+// GetResults godoc
+// @Summary Получить результаты проверок
+// @Description Возвращает список всех результатов проверок
+// @Tags results
+// @Produce json
+// @Success 200 {array} models.Result
+// @Router /results [get]
 func (s *Server) GetResults(w http.ResponseWriter, _ *http.Request) {
 	results, err := s.ResultRepo.GetAll()
 	if err != nil {
@@ -406,6 +431,19 @@ func (s *Server) GetResults(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, results)
 }
 
+// GetResultsByCheckID godoc
+// @Summary Получить результаты проверки
+// @Description Возвращает список результатов для конкретной проверки с фильтрацией по периоду и пагинацией
+// @Tags results
+// @Produce json
+// @Param id path int true "ID проверки"
+// @Param from query string false "Начало периода" example:"2024-01-01T00:00:00Z"
+// @Param to query string false "Конец периода" example:"2024-01-31T23:59:59Z"
+// @Param page query int false "Номер страницы" default:"1"
+// @Param page_size query int false "Размер страницы" default:"50"
+// @Success 200 {object} models.ResultsResponse
+// @Failure 400 {string} string "invalid check id or parameters"
+// @Router /checks/{id}/results [get]
 // GetResultsByCheckID godoc
 // @Summary Получить результаты проверки
 // @Description Возвращает список результатов для конкретной проверки с фильтрацией по периоду и пагинацией
@@ -930,6 +968,11 @@ func (s *Server) CreateCheckDirect(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "port is required for tcp/udp checks")
 			return
 		}
+	case "tls":
+		if body.Params.Port <= 0 {
+			writeError(w, http.StatusBadRequest, "port is required for tls check")
+			return
+		}
 	}
 
 	var check models.Check
@@ -1011,6 +1054,11 @@ func (s *Server) UpdateCheck(w http.ResponseWriter, r *http.Request) {
 	case "tcp", "udp":
 		if body.Params.Port <= 0 {
 			writeError(w, http.StatusBadRequest, "port is required for tcp/udp checks")
+			return
+		}
+	case "tls":
+		if body.Params.Port <= 0 {
+			writeError(w, http.StatusBadRequest, "port is required for tls check")
 			return
 		}
 	}

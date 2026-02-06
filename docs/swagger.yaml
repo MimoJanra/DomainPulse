@@ -1,24 +1,65 @@
-basePath: /
 definitions:
-  models.Check:
+  github_com_MimoJanra_DomainPulse_internal_models.Check:
     properties:
       domain_id:
         example: 1
         type: integer
-      frequency:
-        example: 5m
-        type: string
+      enabled:
+        example: true
+        type: boolean
       id:
         example: 1
         type: integer
+      interval_seconds:
+        example: 60
+        type: integer
+      params:
+        $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.CheckParams'
       path:
         example: /
         type: string
+      rate_limit_per_minute:
+        example: 60
+        type: integer
+      realtime_mode:
+        example: false
+        type: boolean
       type:
         example: http
         type: string
     type: object
-  models.Domain:
+  github_com_MimoJanra_DomainPulse_internal_models.CheckParams:
+    properties:
+      body:
+        example: ""
+        type: string
+      headers:
+        additionalProperties:
+          type: string
+        example:
+          ' "X-Custom-Header"': ' "value"}'
+          '{"Authorization"': ' "Bearer token"'
+        type: object
+      method:
+        example: GET
+        type: string
+      path:
+        example: /health
+        type: string
+      payload:
+        example: ping
+        type: string
+      port:
+        example: 80
+        type: integer
+      scheme:
+        example: https
+        type: string
+      timeout_ms:
+        example: 5000
+        type: integer
+    type: object
+  github_com_MimoJanra_DomainPulse_internal_models.Domain:
     properties:
       id:
         example: 1
@@ -27,20 +68,511 @@ definitions:
         example: example.com
         type: string
     type: object
-host: localhost:8080
+  github_com_MimoJanra_DomainPulse_internal_models.LatencyStats:
+    properties:
+      avg:
+        example: 150.5
+        type: number
+      max:
+        example: 500
+        type: integer
+      median:
+        example: 145
+        type: number
+      min:
+        example: 50
+        type: integer
+      p95:
+        example: 300
+        type: number
+      p99:
+        example: 450
+        type: number
+    type: object
+  github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings:
+    properties:
+      chat_id:
+        example: "-1001234567890"
+        type: string
+      enabled:
+        example: true
+        type: boolean
+      id:
+        example: 1
+        type: integer
+      notify_on_failure:
+        example: true
+        type: boolean
+      notify_on_slow_response:
+        example: true
+        type: boolean
+      notify_on_success:
+        example: false
+        type: boolean
+      slow_response_threshold_ms:
+        example: 1000
+        type: integer
+      token:
+        example: 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
+        type: string
+      type:
+        example: telegram
+        type: string
+      webhook_url:
+        example: https://hooks.slack.com/services/...
+        type: string
+    type: object
+  github_com_MimoJanra_DomainPulse_internal_models.Result:
+    properties:
+      check_id:
+        example: 1
+        type: integer
+      created_at:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      duration_ms:
+        example: 150
+        type: integer
+      error_message:
+        example: ""
+        type: string
+      id:
+        example: 1
+        type: integer
+      outcome:
+        example: 2xx
+        type: string
+      status:
+        example: success
+        type: string
+      status_code:
+        example: 200
+        type: integer
+    type: object
+  github_com_MimoJanra_DomainPulse_internal_models.ResultsResponse:
+    properties:
+      page:
+        type: integer
+      page_size:
+        type: integer
+      results:
+        items:
+          $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Result'
+        type: array
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  github_com_MimoJanra_DomainPulse_internal_models.StatsResponse:
+    properties:
+      latency_stats:
+        $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.LatencyStats'
+      status_distribution:
+        additionalProperties:
+          type: integer
+        type: object
+      total_results:
+        example: 1000
+        type: integer
+    type: object
+  github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalData:
+    properties:
+      avg_latency:
+        example: 150.5
+        type: number
+      count:
+        example: 60
+        type: integer
+      failure_count:
+        example: 2
+        type: integer
+      max_latency:
+        example: 500
+        type: integer
+      min_latency:
+        example: 50
+        type: integer
+      status_distribution:
+        additionalProperties:
+          type: integer
+        type: object
+      success_count:
+        example: 58
+        type: integer
+      timestamp:
+        example: "2024-01-01 12:00:00"
+        type: string
+    type: object
+  github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalData'
+        type: array
+      interval:
+        example: 1m
+        type: string
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
 info:
-  contact:
-    email: support@swagger.io
-    name: API Support
-    url: http://www.swagger.io/support
-  description: REST API для мониторинга доменов и HTTP-проверок.
-  license:
-    name: Apache 2.0
-    url: http://www.apache.org/licenses/LICENSE-2.0.html
-  termsOfService: http://swagger.io/terms/
-  title: DomainPulse API
-  version: "1.0"
+  contact: {}
 paths:
+  /checks:
+    get:
+      description: Возвращает список проверок с опциональной фильтрацией по domain_id
+      parameters:
+      - description: ID домена для фильтрации
+        in: query
+        name: domain_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check'
+            type: array
+      summary: Получить список проверок
+      tags:
+      - checks
+    post:
+      consumes:
+      - application/json
+      description: Создает новую проверку (http, icmp, tcp, udp) с указанием domain_id
+        в теле запроса
+      parameters:
+      - description: Параметры проверки
+        in: body
+        name: check
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check'
+        "400":
+          description: invalid request body
+          schema:
+            type: string
+      summary: Создать проверку
+      tags:
+      - checks
+  /checks/{id}:
+    delete:
+      description: Удаляет проверку по ID
+      parameters:
+      - description: ID проверки
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: integer
+            type: object
+        "400":
+          description: invalid check id
+          schema:
+            type: string
+        "404":
+          description: check not found
+          schema:
+            type: string
+      summary: Удалить проверку
+      tags:
+      - checks
+    put:
+      consumes:
+      - application/json
+      description: Обновляет параметры проверки
+      parameters:
+      - description: ID проверки
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Параметры проверки
+        in: body
+        name: check
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check'
+        "400":
+          description: invalid request body
+          schema:
+            type: string
+        "404":
+          description: check not found
+          schema:
+            type: string
+      summary: Редактировать проверку
+      tags:
+      - checks
+  /checks/{id}/disable:
+    post:
+      description: Отключает проверку от выполнения
+      parameters:
+      - description: ID проверки
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: invalid check id
+          schema:
+            type: string
+        "404":
+          description: check not found
+          schema:
+            type: string
+      summary: Отключить проверку
+      tags:
+      - checks
+  /checks/{id}/enable:
+    post:
+      description: Включает проверку для выполнения
+      parameters:
+      - description: ID проверки
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: invalid check id
+          schema:
+            type: string
+        "404":
+          description: check not found
+          schema:
+            type: string
+      summary: Включить проверку
+      tags:
+      - checks
+  /checks/{id}/intervals:
+    get:
+      description: Возвращает данные, агрегированные по тайм-интервалам (1m, 5m, 1h)
+        для построения графиков с пагинацией
+      parameters:
+      - description: ID проверки
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Интервал агрегации
+        enum:
+        - 1m
+        - 5m
+        - 1h
+        in: query
+        name: interval
+        required: true
+        type: string
+      - description: Начало периода
+        in: query
+        name: from
+        type: string
+      - description: Конец периода
+        in: query
+        name: to
+        type: string
+      - description: Номер страницы
+        in: query
+        name: page
+        type: integer
+      - description: Размер страницы
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalResponse'
+        "400":
+          description: invalid check id, interval or parameters
+          schema:
+            type: string
+        "404":
+          description: check not found
+          schema:
+            type: string
+      summary: Получить агрегированные данные по тайм-интервалам
+      tags:
+      - results
+  /checks/{id}/results:
+    get:
+      description: |-
+        Возвращает список результатов для конкретной проверки с фильтрацией по периоду и пагинацией
+        Возвращает список результатов для конкретной проверки с фильтрацией по периоду и пагинацией
+      parameters:
+      - description: ID проверки
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Начало периода
+        in: query
+        name: from
+        type: string
+      - description: Конец периода
+        in: query
+        name: to
+        type: string
+      - description: Номер страницы
+        in: query
+        name: page
+        type: integer
+      - description: Размер страницы
+        in: query
+        name: page_size
+        type: integer
+      - description: ID проверки
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Начало периода
+        in: query
+        name: from
+        type: string
+      - description: Конец периода
+        in: query
+        name: to
+        type: string
+      - description: Номер страницы
+        in: query
+        name: page
+        type: integer
+      - description: Размер страницы
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.ResultsResponse'
+        "400":
+          description: invalid check id or parameters
+          schema:
+            type: string
+      summary: Получить результаты проверки
+      tags:
+      - results
+      - results
+  /checks/{id}/stats:
+    get:
+      description: 'Возвращает агрегированную статистику: распределение по статусам
+        и статистику latency'
+      parameters:
+      - description: ID проверки
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Начало периода
+        in: query
+        name: from
+        type: string
+      - description: Конец периода
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.StatsResponse'
+        "400":
+          description: invalid check id or parameters
+          schema:
+            type: string
+        "404":
+          description: check not found
+          schema:
+            type: string
+      summary: Получить статистику проверки
+      tags:
+      - results
+  /dashboard/recent:
+    get:
+      description: Возвращает агрегированные данные для всех проверок с пагинацией
+      parameters:
+      - description: Начало периода (RFC3339)
+        in: query
+        name: from
+        type: string
+      - description: Конец периода (RFC3339)
+        in: query
+        name: to
+        type: string
+      - description: Номер страницы
+        in: query
+        name: page
+        type: integer
+      - description: Размер страницы
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalResponse'
+      summary: Получить данные для графика на главной странице
+      tags:
+      - results
   /domains:
     get:
       description: Возвращает список всех доменов в системе
@@ -51,7 +583,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/models.Domain'
+              $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Domain'
             type: array
       summary: Получить список доменов
       tags:
@@ -59,9 +591,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Добавляет домен для мониторинга
+      description: Добавляет домен (example.com) или IP (IPv4/IPv6) для мониторинга
       parameters:
-      - description: Данные домена
+      - description: 'Данные: name — домен или IP'
         in: body
         name: domain
         required: true
@@ -73,12 +605,12 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/models.Domain'
+            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Domain'
         "400":
           description: invalid request body
           schema:
             type: string
-      summary: Добавить новый домен
+      summary: Добавить домен или IP
       tags:
       - domains
   /domains/{id}:
@@ -122,7 +654,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/models.Check'
+              $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check'
             type: array
         "400":
           description: invalid domain id
@@ -134,7 +666,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Добавляет новую HTTP-проверку для домена
+      description: Добавляет новую проверку (http, icmp, tcp, udp) для домена
       parameters:
       - description: ID домена
         in: path
@@ -153,7 +685,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/models.Check'
+            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check'
         "400":
           description: invalid request body
           schema:
@@ -161,6 +693,172 @@ paths:
       summary: Добавить проверку для домена
       tags:
       - checks
+  /notifications:
+    get:
+      description: Возвращает список всех настроек уведомлений
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings'
+            type: array
+      summary: Получить настройки уведомлений
+      tags:
+      - notifications
+    post:
+      consumes:
+      - application/json
+      description: Создает новую настройку уведомлений для Telegram или Slack
+      parameters:
+      - description: Настройки уведомлений
+        in: body
+        name: settings
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings'
+        "400":
+          description: invalid request body
+          schema:
+            type: string
+      summary: Создать настройки уведомлений
+      tags:
+      - notifications
+  /notifications/{id}:
+    delete:
+      description: Удаляет настройки уведомлений по ID
+      parameters:
+      - description: ID настроек
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: integer
+            type: object
+        "404":
+          description: notification settings not found
+          schema:
+            type: string
+      summary: Удалить настройки уведомлений
+      tags:
+      - notifications
+    put:
+      consumes:
+      - application/json
+      description: Обновляет настройки уведомлений по ID
+      parameters:
+      - description: ID настроек
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Настройки уведомлений
+        in: body
+        name: settings
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings'
+        "400":
+          description: invalid request body
+          schema:
+            type: string
+        "404":
+          description: notification settings not found
+          schema:
+            type: string
+      summary: Обновить настройки уведомлений
+      tags:
+      - notifications
+  /notifications/{id}/disable:
+    post:
+      description: Отключает настройки уведомлений
+      parameters:
+      - description: ID настроек
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: notification settings not found
+          schema:
+            type: string
+      summary: Отключить уведомления
+      tags:
+      - notifications
+  /notifications/{id}/enable:
+    post:
+      description: Включает настройки уведомлений
+      parameters:
+      - description: ID настроек
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: notification settings not found
+          schema:
+            type: string
+      summary: Включить уведомления
+      tags:
+      - notifications
+  /results:
+    get:
+      description: |-
+        Возвращает список всех результатов проверок
+        Возвращает список всех результатов проверок
+      produces:
+      - application/json
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Result'
+            type: array
+      summary: Получить результаты проверок
+      tags:
+      - results
+      - results
   /run-check:
     post:
       description: Выполняет все проверки и записывает результаты в БД
@@ -175,6 +873,4 @@ paths:
       summary: Запустить все проверки вручную
       tags:
       - checks
-schemes:
-- http
 swagger: "2.0"

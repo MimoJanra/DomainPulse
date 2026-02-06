@@ -292,7 +292,7 @@ function updateCheckForm() {
     const udpParams = document.getElementById('udpParams');
     
     httpParams.style.display = type === 'http' ? 'block' : 'none';
-    portParams.style.display = (type === 'tcp' || type === 'udp') ? 'block' : 'none';
+    portParams.style.display = (type === 'tcp' || type === 'udp' || type === 'tls') ? 'block' : 'none';
     tcpParams.style.display = type === 'tcp' ? 'block' : 'none';
     udpParams.style.display = type === 'udp' ? 'block' : 'none';
 }
@@ -305,7 +305,7 @@ function updateEditCheckForm() {
     const udpParams = document.getElementById('editUdpParams');
     
     httpParams.style.display = type === 'http' ? 'block' : 'none';
-    portParams.style.display = (type === 'tcp' || type === 'udp') ? 'block' : 'none';
+    portParams.style.display = (type === 'tcp' || type === 'udp' || type === 'tls') ? 'block' : 'none';
     tcpParams.style.display = type === 'tcp' ? 'block' : 'none';
     udpParams.style.display = type === 'udp' ? 'block' : 'none';
 }
@@ -341,7 +341,7 @@ document.getElementById('addCheckForm').addEventListener('submit', async (e) => 
         const body = document.getElementById('checkBody').value;
         if (body) params.body = body;
     }
-    if (type === 'tcp' || type === 'udp') {
+    if (type === 'tcp' || type === 'udp' || type === 'tls') {
         const port = parseInt(document.getElementById('checkPort').value);
         if (!port || port < 1 || port > 65535) {
             showError('Укажите корректный порт (1-65535)');
@@ -427,7 +427,7 @@ async function editCheck(checkId) {
                 document.getElementById('editCheckMethod').value = check.params.method || 'GET';
                 document.getElementById('editCheckBody').value = check.params.body || '';
             }
-            if (check.type === 'tcp' || check.type === 'udp') {
+            if (check.type === 'tcp' || check.type === 'udp' || check.type === 'tls') {
                 document.getElementById('editCheckPort').value = check.params.port || '';
             }
             if (check.type === 'tcp') {
@@ -480,7 +480,7 @@ document.getElementById('editCheckForm').addEventListener('submit', async (e) =>
         const body = document.getElementById('editCheckBody').value;
         if (body) params.body = body;
     }
-    if (type === 'tcp' || type === 'udp') {
+    if (type === 'tcp' || type === 'udp' || type === 'tls') {
         const port = parseInt(document.getElementById('editCheckPort').value);
         if (!port || port < 1 || port > 65535) {
             showError('Укажите корректный порт (1-65535)');

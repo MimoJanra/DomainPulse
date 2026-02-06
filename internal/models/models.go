@@ -58,7 +58,7 @@ type LatencyStats struct {
 
 type StatsResponse struct {
 	TotalResults       int            `json:"total_results" example:"1000"`
-	StatusDistribution map[string]int `json:"status_distribution" example:"{\"success\":950,\"failure\":50}"`
+	StatusDistribution map[string]int `json:"status_distribution"`
 	LatencyStats       LatencyStats   `json:"latency_stats"`
 }
 
@@ -70,7 +70,7 @@ type TimeIntervalData struct {
 	AvgLatency         float64        `json:"avg_latency" example:"150.5"`
 	MinLatency         int            `json:"min_latency" example:"50"`
 	MaxLatency         int            `json:"max_latency" example:"500"`
-	StatusDistribution map[string]int `json:"status_distribution" example:"{\"success\":58,\"failure\":2}"`
+	StatusDistribution map[string]int `json:"status_distribution"`
 }
 
 type TimeIntervalResponse struct {
