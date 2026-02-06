@@ -116,7 +116,7 @@ func (wp *WorkerPool) SetWorkers(count int) {
 	}
 }
 
-func (wp *WorkerPool) worker(id int) {
+func (wp *WorkerPool) worker(_ int) {
 	defer wp.wg.Done()
 
 	for {

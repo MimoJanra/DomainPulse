@@ -192,12 +192,12 @@ func (s *Scheduler) runRealtimeLoop(check models.Check, stopChan chan struct{}) 
 		case <-s.stopChan:
 			return
 		default:
-			s.runRealtimeCheck(check, stopChan)
+			s.runRealtimeCheck(check)
 		}
 	}
 }
 
-func (s *Scheduler) runRealtimeCheck(check models.Check, stopChan chan struct{}) {
+func (s *Scheduler) runRealtimeCheck(check models.Check) {
 	s.waitForGlobalRateLimit()
 	s.waitForCheckRateLimit(check)
 	s.runCheck(check)
