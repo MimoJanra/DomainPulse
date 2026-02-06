@@ -1,7 +1,9 @@
 package checker
 
 import (
+	"fmt"
 	"log"
+	"net"
 	"sync"
 	"time"
 
@@ -144,7 +146,7 @@ func (wp *WorkerPool) runCheckByType(job CheckJob, timeout time.Duration) *Check
 func (wp *WorkerPool) runHTTPCheck(job CheckJob, timeout time.Duration) CheckResult {
 	fullURL := buildHTTPURL(job.Domain.Name, job.Check.Params)
 	method := normalizeHTTPMethod(job.Check.Params.Method)
-	return RunHTTPCheckWithMethod(fullURL, method, job.Check.Params.Body, timeout)
+	return RunHTTPCheckWithMethodAndHeaders(fullURL, method, job.Check.Params.Body, job.Check.Params.Headers, timeout)
 }
 
 func buildHTTPURL(domainName string, params models.CheckParams) string {
@@ -156,8 +158,11 @@ func buildHTTPURL(domainName string, params models.CheckParams) string {
 	if scheme == "" {
 		scheme = "https"
 	}
-
-	fullURL := scheme + "://" + domainName
+	host := domainName
+	if ip := net.ParseIP(domainName); ip != nil && ip.To4() == nil {
+		host = "[" + domainName + "]"
+	}
+	fullURL := scheme + "://" + host
 	if len(path) > 0 && path[0] != '/' {
 		fullURL += "/"
 	}
@@ -209,7 +214,7 @@ func (wp *WorkerPool) saveResult(job CheckJob, result CheckResult, duration time
 
 	isError := result.Status == "error" || result.Status == "timeout"
 	wp.updateMetrics(job.Check.ID, duration, isError)
-	
+
 	wp.sendNotifications(job, result, res.CreatedAt)
 }
 
@@ -225,7 +230,7 @@ func (wp *WorkerPool) sendNotifications(job CheckJob, result CheckResult, create
 	}
 
 	isFailure := result.Status == "error" || result.Status == "timeout"
-	
+
 	msg := notifications.NotificationMessage{
 		CheckID:      job.Check.ID,
 		DomainName:   job.Domain.Name,
@@ -237,12 +242,40 @@ func (wp *WorkerPool) sendNotifications(job CheckJob, result CheckResult, create
 	}
 
 	sender := notifications.NewNotificationSender()
-	sender.SendNotifications(settingsList, msg, isFailure)
+
+	for _, settings := range settingsList {
+		shouldNotify := false
+		notifySlow := false
+
+		if isFailure && settings.NotifyOnFailure {
+			shouldNotify = true
+		}
+		if !isFailure && settings.NotifyOnSuccess {
+			shouldNotify = true
+		}
+
+		if settings.NotifyOnSlowResponse && settings.SlowResponseThreshold > 0 {
+			if result.DurationMS >= settings.SlowResponseThreshold {
+				notifySlow = true
+			}
+		}
+
+		if shouldNotify {
+			sender.SendNotification(settings, msg)
+		}
+
+		if notifySlow {
+			slowMsg := msg
+			slowMsg.Status = "slow_response"
+			slowMsg.ErrorMessage = fmt.Sprintf("Response time %d ms exceeds threshold of %d ms", result.DurationMS, settings.SlowResponseThreshold)
+			sender.SendNotification(settings, slowMsg)
+		}
+	}
 }
 
 func (wp *WorkerPool) updateMetrics(checkID int, duration time.Duration, isError bool) {
 	metrics := wp.getOrCreateMetrics(checkID)
-	
+
 	metrics.mu.Lock()
 	defer metrics.mu.Unlock()
 

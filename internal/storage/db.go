@@ -70,12 +70,17 @@ func InitDB() (*sql.DB, error) {
 		chat_id TEXT,
 		webhook_url TEXT,
 		notify_on_failure INTEGER NOT NULL DEFAULT 1,
-		notify_on_success INTEGER NOT NULL DEFAULT 0
+		notify_on_success INTEGER NOT NULL DEFAULT 0,
+		notify_on_slow_response INTEGER NOT NULL DEFAULT 0,
+		slow_response_threshold_ms INTEGER NOT NULL DEFAULT 0
 	);
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("error creating notification_settings table: %w", err)
 	}
+
+	_, _ = db.Exec(`ALTER TABLE notification_settings ADD COLUMN notify_on_slow_response INTEGER NOT NULL DEFAULT 0`)
+	_, _ = db.Exec(`ALTER TABLE notification_settings ADD COLUMN slow_response_threshold_ms INTEGER NOT NULL DEFAULT 0`)
 
 	return db, nil
 }

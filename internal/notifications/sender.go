@@ -124,6 +124,8 @@ func (ns *NotificationSender) formatTelegramMessage(msg NotificationMessage) str
 	statusEmoji := "✅"
 	if msg.Status == "error" || msg.Status == "timeout" {
 		statusEmoji = "❌"
+	} else if msg.Status == "slow_response" {
+		statusEmoji = "⚠️"
 	}
 
 	text := fmt.Sprintf("<b>%s Domain Check</b>\n\n", statusEmoji)
@@ -145,6 +147,8 @@ func (ns *NotificationSender) formatSlackMessage(msg NotificationMessage) string
 	statusEmoji := "✅"
 	if msg.Status == "error" || msg.Status == "timeout" {
 		statusEmoji = "❌"
+	} else if msg.Status == "slow_response" {
+		statusEmoji = "⚠️"
 	}
 
 	text := fmt.Sprintf("%s *Domain Check Report*\n\n", statusEmoji)

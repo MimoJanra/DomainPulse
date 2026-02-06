@@ -6,13 +6,14 @@ type Domain struct {
 }
 
 type CheckParams struct {
-	Path      string `json:"path,omitempty" example:"/health"`
-	Port      int    `json:"port,omitempty" example:"80"`
-	Payload   string `json:"payload,omitempty" example:"ping"`
-	TimeoutMS int    `json:"timeout_ms,omitempty" example:"5000"`
-	Scheme    string `json:"scheme,omitempty" example:"https"`
-	Method    string `json:"method,omitempty" example:"GET"`
-	Body      string `json:"body,omitempty" example:""`
+	Path      string            `json:"path,omitempty" example:"/health"`
+	Port      int               `json:"port,omitempty" example:"80"`
+	Payload   string            `json:"payload,omitempty" example:"ping"`
+	TimeoutMS int               `json:"timeout_ms,omitempty" example:"5000"`
+	Scheme    string            `json:"scheme,omitempty" example:"https"`
+	Method    string            `json:"method,omitempty" example:"GET"`
+	Body      string            `json:"body,omitempty" example:""`
+	Headers   map[string]string `json:"headers,omitempty" example:"{\"Authorization\": \"Bearer token\", \"X-Custom-Header\": \"value\"}"`
 }
 
 type Check struct {
@@ -82,12 +83,14 @@ type TimeIntervalResponse struct {
 }
 
 type NotificationSettings struct {
-	ID              int    `json:"id" example:"1"`
-	Type            string `json:"type" example:"telegram"`
-	Enabled         bool   `json:"enabled" example:"true"`
-	Token           string `json:"token,omitempty" example:"123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"`
-	ChatID          string `json:"chat_id,omitempty" example:"-1001234567890"`
-	WebhookURL      string `json:"webhook_url,omitempty" example:"https://hooks.slack.com/services/..."`
-	NotifyOnFailure bool   `json:"notify_on_failure" example:"true"`
-	NotifyOnSuccess bool   `json:"notify_on_success" example:"false"`
+	ID                    int    `json:"id" example:"1"`
+	Type                  string `json:"type" example:"telegram"`
+	Enabled               bool   `json:"enabled" example:"true"`
+	Token                 string `json:"token,omitempty" example:"123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"`
+	ChatID                string `json:"chat_id,omitempty" example:"-1001234567890"`
+	WebhookURL            string `json:"webhook_url,omitempty" example:"https://hooks.slack.com/services/..."`
+	NotifyOnFailure       bool   `json:"notify_on_failure" example:"true"`
+	NotifyOnSuccess       bool   `json:"notify_on_success" example:"false"`
+	NotifyOnSlowResponse  bool   `json:"notify_on_slow_response" example:"true"`
+	SlowResponseThreshold int    `json:"slow_response_threshold_ms" example:"1000"`
 }

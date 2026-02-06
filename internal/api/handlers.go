@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -47,12 +48,21 @@ var supportedCheckTypes = map[string]struct{}{
 }
 
 func validateDomain(raw string) (string, error) {
-	raw = strings.TrimSpace(strings.ToLower(raw))
+	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return "", errors.New("domain name required")
+		return "", errors.New("domain name or IP required")
 	}
 
-	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
+	hostForIP := raw
+	if strings.HasPrefix(hostForIP, "[") && strings.HasSuffix(hostForIP, "]") {
+		hostForIP = hostForIP[1 : len(hostForIP)-1]
+	}
+	if ip := net.ParseIP(hostForIP); ip != nil {
+		return ip.String(), nil
+	}
+
+	rawLower := strings.ToLower(raw)
+	if !strings.HasPrefix(rawLower, "http://") && !strings.HasPrefix(rawLower, "https://") {
 		raw = "http://" + raw
 	}
 
@@ -62,10 +72,15 @@ func validateDomain(raw string) (string, error) {
 	}
 
 	host := u.Hostname()
-	if host == "" || !domainRegex.MatchString(host) {
+	if host == "" {
+		return "", errors.New("invalid domain or IP")
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return host, nil
+	}
+	if !domainRegex.MatchString(strings.ToLower(host)) {
 		return "", errors.New("invalid domain name")
 	}
-
 	return host, nil
 }
 
@@ -86,12 +101,12 @@ func (s *Server) GetDomains(w http.ResponseWriter, _ *http.Request) {
 }
 
 // CreateDomain godoc
-// @Summary Добавить новый домен
-// @Description Добавляет домен для мониторинга
+// @Summary Добавить домен или IP
+// @Description Добавляет домен (example.com) или IP (IPv4/IPv6) для мониторинга
 // @Tags domains
 // @Accept json
 // @Produce json
-// @Param domain body object true "Данные домена" example({"name": "example.com"})
+// @Param domain body object true "Данные: name — домен или IP" example({"name": "example.com"})
 // @Success 201 {object} models.Domain
 // @Failure 400 {string} string "invalid request body"
 // @Router /domains [post]
@@ -312,7 +327,7 @@ func (s *Server) getCheckTimeout(check models.Check) time.Duration {
 func (s *Server) runHTTPCheckForDomain(domain models.Domain, check models.Check, timeout time.Duration) checker.CheckResult {
 	fullURL := s.buildHTTPURLForDomain(domain.Name, check.Params)
 	method := s.normalizeHTTPMethod(check.Params.Method)
-	return checker.RunHTTPCheckWithMethod(fullURL, method, check.Params.Body, timeout)
+	return checker.RunHTTPCheckWithMethodAndHeaders(fullURL, method, check.Params.Body, check.Params.Headers, timeout)
 }
 
 func (s *Server) buildHTTPURLForDomain(domainName string, params models.CheckParams) string {
@@ -324,8 +339,11 @@ func (s *Server) buildHTTPURLForDomain(domainName string, params models.CheckPar
 	if scheme == "" {
 		scheme = "https"
 	}
-
-	fullURL := scheme + "://" + domainName
+	host := domainName
+	if ip := net.ParseIP(domainName); ip != nil && ip.To4() == nil {
+		host = "[" + domainName + "]"
+	}
+	fullURL := scheme + "://" + host
 	if !strings.HasPrefix(path, "/") {
 		fullURL += "/"
 	}
@@ -882,7 +900,6 @@ func (s *Server) CreateCheckDirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify domain exists
 	_, err := s.DomainRepo.GetByID(body.DomainID)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "domain not found")
@@ -998,20 +1015,7 @@ func (s *Server) UpdateCheck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	currentCheck, err := s.CheckRepo.GetByID(checkID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to get current check")
-		return
-	}
-
-	realtimeMode := body.RealtimeMode
-	rateLimit := body.RateLimitPerMinute
-	if !body.RealtimeMode && rateLimit == 0 {
-		realtimeMode = currentCheck.RealtimeMode
-		rateLimit = currentCheck.RateLimitPerMinute
-	}
-
-	check, err := s.CheckRepo.UpdateWithRealtime(checkID, body.Type, body.IntervalSeconds, body.Params, realtimeMode, rateLimit)
+	check, err := s.CheckRepo.UpdateWithRealtime(checkID, body.Type, body.IntervalSeconds, body.Params, body.RealtimeMode, body.RateLimitPerMinute)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update check")
 		return
