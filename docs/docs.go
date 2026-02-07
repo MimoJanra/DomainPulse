@@ -39,7 +39,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check"
+                                "$ref": "#/definitions/models.Check"
                             }
                         }
                     }
@@ -72,7 +72,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check"
+                            "$ref": "#/definitions/models.Check"
                         }
                     },
                     "400": {
@@ -119,7 +119,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check"
+                            "$ref": "#/definitions/models.Check"
                         }
                     },
                     "400": {
@@ -322,7 +322,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalResponse"
+                            "$ref": "#/definitions/models.TimeIntervalResponse"
                         }
                     },
                     "400": {
@@ -342,48 +342,15 @@ const docTemplate = `{
         },
         "/checks/{id}/results": {
             "get": {
-                "description": "Возвращает список результатов для конкретной проверки с фильтрацией по периоду и пагинацией\nВозвращает список результатов для конкретной проверки с фильтрацией по периоду и пагинацией",
+                "description": "Возвращает список результатов для конкретной проверки с фильтрацией по периоду и пагинацией",
                 "produces": [
-                    "application/json",
                     "application/json"
                 ],
                 "tags": [
-                    "results",
                     "results"
                 ],
                 "summary": "Получить результаты проверки",
                 "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "ID проверки",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Начало периода",
-                        "name": "from",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Конец периода",
-                        "name": "to",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Номер страницы",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Размер страницы",
-                        "name": "page_size",
-                        "in": "query"
-                    },
                     {
                         "type": "integer",
                         "description": "ID проверки",
@@ -420,7 +387,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.ResultsResponse"
+                            "$ref": "#/definitions/models.ResultsResponse"
                         }
                     },
                     "400": {
@@ -467,7 +434,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.StatsResponse"
+                            "$ref": "#/definitions/models.StatsResponse"
                         }
                     },
                     "400": {
@@ -525,7 +492,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalResponse"
+                            "$ref": "#/definitions/models.TimeIntervalResponse"
                         }
                     }
                 }
@@ -547,7 +514,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Domain"
+                                "$ref": "#/definitions/models.Domain"
                             }
                         }
                     }
@@ -580,7 +547,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Domain"
+                            "$ref": "#/definitions/models.Domain"
                         }
                     },
                     "400": {
@@ -655,7 +622,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check"
+                                "$ref": "#/definitions/models.Check"
                             }
                         }
                     },
@@ -701,7 +668,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check"
+                            "$ref": "#/definitions/models.Check"
                         }
                     },
                     "400": {
@@ -729,7 +696,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings"
+                                "$ref": "#/definitions/models.NotificationSettings"
                             }
                         }
                     }
@@ -762,7 +729,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings"
+                            "$ref": "#/definitions/models.NotificationSettings"
                         }
                     },
                     "400": {
@@ -809,7 +776,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings"
+                            "$ref": "#/definitions/models.NotificationSettings"
                         }
                     },
                     "400": {
@@ -937,13 +904,11 @@ const docTemplate = `{
         },
         "/results": {
             "get": {
-                "description": "Возвращает список всех результатов проверок\nВозвращает список всех результатов проверок",
+                "description": "Возвращает список всех результатов проверок",
                 "produces": [
-                    "application/json",
                     "application/json"
                 ],
                 "tags": [
-                    "results",
                     "results"
                 ],
                 "summary": "Получить результаты проверок",
@@ -953,7 +918,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Result"
+                                "$ref": "#/definitions/models.Result"
                             }
                         }
                     }
@@ -983,7 +948,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "github_com_MimoJanra_DomainPulse_internal_models.Check": {
+        "models.Check": {
             "type": "object",
             "properties": {
                 "domain_id": {
@@ -1003,7 +968,7 @@ const docTemplate = `{
                     "example": 60
                 },
                 "params": {
-                    "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.CheckParams"
+                    "$ref": "#/definitions/models.CheckParams"
                 },
                 "path": {
                     "type": "string",
@@ -1023,7 +988,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_MimoJanra_DomainPulse_internal_models.CheckParams": {
+        "models.CheckParams": {
             "type": "object",
             "properties": {
                 "body": {
@@ -1066,7 +1031,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_MimoJanra_DomainPulse_internal_models.Domain": {
+        "models.Domain": {
             "type": "object",
             "properties": {
                 "id": {
@@ -1079,7 +1044,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_MimoJanra_DomainPulse_internal_models.LatencyStats": {
+        "models.LatencyStats": {
             "type": "object",
             "properties": {
                 "avg": {
@@ -1108,7 +1073,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings": {
+        "models.NotificationSettings": {
             "type": "object",
             "properties": {
                 "chat_id": {
@@ -1153,7 +1118,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_MimoJanra_DomainPulse_internal_models.Result": {
+        "models.Result": {
             "type": "object",
             "properties": {
                 "check_id": {
@@ -1190,7 +1155,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_MimoJanra_DomainPulse_internal_models.ResultsResponse": {
+        "models.ResultsResponse": {
             "type": "object",
             "properties": {
                 "page": {
@@ -1202,7 +1167,7 @@ const docTemplate = `{
                 "results": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Result"
+                        "$ref": "#/definitions/models.Result"
                     }
                 },
                 "total": {
@@ -1213,11 +1178,11 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_MimoJanra_DomainPulse_internal_models.StatsResponse": {
+        "models.StatsResponse": {
             "type": "object",
             "properties": {
                 "latency_stats": {
-                    "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.LatencyStats"
+                    "$ref": "#/definitions/models.LatencyStats"
                 },
                 "status_distribution": {
                     "type": "object",
@@ -1231,7 +1196,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalData": {
+        "models.TimeIntervalData": {
             "type": "object",
             "properties": {
                 "avg_latency": {
@@ -1270,13 +1235,13 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalResponse": {
+        "models.TimeIntervalResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalData"
+                        "$ref": "#/definitions/models.TimeIntervalData"
                     }
                 },
                 "interval": {
@@ -1302,12 +1267,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "",
-	Host:             "",
-	BasePath:         "",
-	Schemes:          []string{},
-	Title:            "",
-	Description:      "",
+	Version:          "1.0",
+	Host:             "localhost:8080",
+	BasePath:         "/",
+	Schemes:          []string{"http"},
+	Title:            "DomainPulse API",
+	Description:      "REST API для мониторинга доменов и HTTP-проверок.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

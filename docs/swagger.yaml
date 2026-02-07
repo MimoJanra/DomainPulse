@@ -1,5 +1,6 @@
+basePath: /
 definitions:
-  github_com_MimoJanra_DomainPulse_internal_models.Check:
+  models.Check:
     properties:
       domain_id:
         example: 1
@@ -14,7 +15,7 @@ definitions:
         example: 60
         type: integer
       params:
-        $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.CheckParams'
+        $ref: '#/definitions/models.CheckParams'
       path:
         example: /
         type: string
@@ -28,7 +29,7 @@ definitions:
         example: http
         type: string
     type: object
-  github_com_MimoJanra_DomainPulse_internal_models.CheckParams:
+  models.CheckParams:
     properties:
       body:
         example: ""
@@ -59,7 +60,7 @@ definitions:
         example: 5000
         type: integer
     type: object
-  github_com_MimoJanra_DomainPulse_internal_models.Domain:
+  models.Domain:
     properties:
       id:
         example: 1
@@ -68,7 +69,7 @@ definitions:
         example: example.com
         type: string
     type: object
-  github_com_MimoJanra_DomainPulse_internal_models.LatencyStats:
+  models.LatencyStats:
     properties:
       avg:
         example: 150.5
@@ -89,7 +90,7 @@ definitions:
         example: 450
         type: number
     type: object
-  github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings:
+  models.NotificationSettings:
     properties:
       chat_id:
         example: "-1001234567890"
@@ -122,7 +123,7 @@ definitions:
         example: https://hooks.slack.com/services/...
         type: string
     type: object
-  github_com_MimoJanra_DomainPulse_internal_models.Result:
+  models.Result:
     properties:
       check_id:
         example: 1
@@ -149,7 +150,7 @@ definitions:
         example: 200
         type: integer
     type: object
-  github_com_MimoJanra_DomainPulse_internal_models.ResultsResponse:
+  models.ResultsResponse:
     properties:
       page:
         type: integer
@@ -157,17 +158,17 @@ definitions:
         type: integer
       results:
         items:
-          $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Result'
+          $ref: '#/definitions/models.Result'
         type: array
       total:
         type: integer
       total_pages:
         type: integer
     type: object
-  github_com_MimoJanra_DomainPulse_internal_models.StatsResponse:
+  models.StatsResponse:
     properties:
       latency_stats:
-        $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.LatencyStats'
+        $ref: '#/definitions/models.LatencyStats'
       status_distribution:
         additionalProperties:
           type: integer
@@ -176,7 +177,7 @@ definitions:
         example: 1000
         type: integer
     type: object
-  github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalData:
+  models.TimeIntervalData:
     properties:
       avg_latency:
         example: 150.5
@@ -204,11 +205,11 @@ definitions:
         example: "2024-01-01 12:00:00"
         type: string
     type: object
-  github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalResponse:
+  models.TimeIntervalResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalData'
+          $ref: '#/definitions/models.TimeIntervalData'
         type: array
       interval:
         example: 1m
@@ -222,8 +223,12 @@ definitions:
       total_pages:
         type: integer
     type: object
+host: localhost:8080
 info:
   contact: {}
+  description: REST API для мониторинга доменов и HTTP-проверок.
+  title: DomainPulse API
+  version: "1.0"
 paths:
   /checks:
     get:
@@ -240,7 +245,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check'
+              $ref: '#/definitions/models.Check'
             type: array
       summary: Получить список проверок
       tags:
@@ -263,7 +268,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check'
+            $ref: '#/definitions/models.Check'
         "400":
           description: invalid request body
           schema:
@@ -322,7 +327,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check'
+            $ref: '#/definitions/models.Check'
         "400":
           description: invalid request body
           schema:
@@ -431,7 +436,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalResponse'
+            $ref: '#/definitions/models.TimeIntervalResponse'
         "400":
           description: invalid check id, interval or parameters
           schema:
@@ -445,31 +450,9 @@ paths:
       - results
   /checks/{id}/results:
     get:
-      description: |-
-        Возвращает список результатов для конкретной проверки с фильтрацией по периоду и пагинацией
-        Возвращает список результатов для конкретной проверки с фильтрацией по периоду и пагинацией
+      description: Возвращает список результатов для конкретной проверки с фильтрацией
+        по периоду и пагинацией
       parameters:
-      - description: ID проверки
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: Начало периода
-        in: query
-        name: from
-        type: string
-      - description: Конец периода
-        in: query
-        name: to
-        type: string
-      - description: Номер страницы
-        in: query
-        name: page
-        type: integer
-      - description: Размер страницы
-        in: query
-        name: page_size
-        type: integer
       - description: ID проверки
         in: path
         name: id
@@ -493,19 +476,17 @@ paths:
         type: integer
       produces:
       - application/json
-      - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.ResultsResponse'
+            $ref: '#/definitions/models.ResultsResponse'
         "400":
           description: invalid check id or parameters
           schema:
             type: string
       summary: Получить результаты проверки
       tags:
-      - results
       - results
   /checks/{id}/stats:
     get:
@@ -531,7 +512,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.StatsResponse'
+            $ref: '#/definitions/models.StatsResponse'
         "400":
           description: invalid check id or parameters
           schema:
@@ -569,7 +550,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalResponse'
+            $ref: '#/definitions/models.TimeIntervalResponse'
       summary: Получить данные для графика на главной странице
       tags:
       - results
@@ -583,7 +564,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Domain'
+              $ref: '#/definitions/models.Domain'
             type: array
       summary: Получить список доменов
       tags:
@@ -605,7 +586,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Domain'
+            $ref: '#/definitions/models.Domain'
         "400":
           description: invalid request body
           schema:
@@ -654,7 +635,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check'
+              $ref: '#/definitions/models.Check'
             type: array
         "400":
           description: invalid domain id
@@ -685,7 +666,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check'
+            $ref: '#/definitions/models.Check'
         "400":
           description: invalid request body
           schema:
@@ -703,7 +684,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings'
+              $ref: '#/definitions/models.NotificationSettings'
             type: array
       summary: Получить настройки уведомлений
       tags:
@@ -725,7 +706,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings'
+            $ref: '#/definitions/models.NotificationSettings'
         "400":
           description: invalid request body
           schema:
@@ -780,7 +761,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings'
+            $ref: '#/definitions/models.NotificationSettings'
         "400":
           description: invalid request body
           schema:
@@ -842,22 +823,18 @@ paths:
       - notifications
   /results:
     get:
-      description: |-
-        Возвращает список всех результатов проверок
-        Возвращает список всех результатов проверок
+      description: Возвращает список всех результатов проверок
       produces:
-      - application/json
       - application/json
       responses:
         "200":
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Result'
+              $ref: '#/definitions/models.Result'
             type: array
       summary: Получить результаты проверок
       tags:
-      - results
       - results
   /run-check:
     post:
@@ -873,4 +850,6 @@ paths:
       summary: Запустить все проверки вручную
       tags:
       - checks
+schemes:
+- http
 swagger: "2.0"

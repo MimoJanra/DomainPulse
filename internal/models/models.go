@@ -1,10 +1,14 @@
 package models
 
+// Domain — домен или IP для мониторинга
+// @name Domain
 type Domain struct {
 	ID   int    `json:"id" example:"1"`
 	Name string `json:"name" example:"example.com"`
 }
 
+// CheckParams — параметры проверки (путь, порт, схема, метод и т.д.)
+// @name CheckParams
 type CheckParams struct {
 	Path      string            `json:"path,omitempty" example:"/health"`
 	Port      int               `json:"port,omitempty" example:"80"`
@@ -16,6 +20,8 @@ type CheckParams struct {
 	Headers   map[string]string `json:"headers,omitempty" example:"{\"Authorization\": \"Bearer token\", \"X-Custom-Header\": \"value\"}"`
 }
 
+// Check — проверка (http, icmp, tcp, udp, tls)
+// @name Check
 type Check struct {
 	ID                 int         `json:"id" example:"1"`
 	DomainID           int         `json:"domain_id" example:"1"`
@@ -28,6 +34,8 @@ type Check struct {
 	RateLimitPerMinute int         `json:"rate_limit_per_minute,omitempty" example:"60"`
 }
 
+// Result — результат одной проверки
+// @name Result
 type Result struct {
 	ID           int    `json:"id" example:"1"`
 	CheckID      int    `json:"check_id" example:"1"`
@@ -39,6 +47,8 @@ type Result struct {
 	CreatedAt    string `json:"created_at" example:"2024-01-01T12:00:00Z"`
 }
 
+// ResultsResponse — ответ со списком результатов и пагинацией
+// @name ResultsResponse
 type ResultsResponse struct {
 	Results    []Result `json:"results"`
 	Total      int      `json:"total"`
@@ -47,6 +57,8 @@ type ResultsResponse struct {
 	TotalPages int      `json:"total_pages"`
 }
 
+// LatencyStats — статистика задержки (min, max, avg, p95)
+// @name LatencyStats
 type LatencyStats struct {
 	Min    int     `json:"min" example:"50"`
 	Max    int     `json:"max" example:"500"`
@@ -56,12 +68,16 @@ type LatencyStats struct {
 	P99    float64 `json:"p99" example:"450.0"`
 }
 
+// StatsResponse — ответ со статистикой проверки
+// @name StatsResponse
 type StatsResponse struct {
 	TotalResults       int            `json:"total_results" example:"1000"`
 	StatusDistribution map[string]int `json:"status_distribution"`
 	LatencyStats       LatencyStats   `json:"latency_stats"`
 }
 
+// TimeIntervalData — агрегированные данные по одному тайм-интервалу
+// @name TimeIntervalData
 type TimeIntervalData struct {
 	Timestamp          string         `json:"timestamp" example:"2024-01-01 12:00:00"`
 	Count              int            `json:"count" example:"60"`
@@ -73,6 +89,8 @@ type TimeIntervalData struct {
 	StatusDistribution map[string]int `json:"status_distribution"`
 }
 
+// TimeIntervalResponse — ответ с данными по интервалам для графиков
+// @name TimeIntervalResponse
 type TimeIntervalResponse struct {
 	Interval   string             `json:"interval" example:"1m"`
 	Data       []TimeIntervalData `json:"data"`
@@ -82,6 +100,8 @@ type TimeIntervalResponse struct {
 	TotalPages int                `json:"total_pages,omitempty"`
 }
 
+// NotificationSettings — настройки уведомлений (Telegram, Slack)
+// @name NotificationSettings
 type NotificationSettings struct {
 	ID                    int    `json:"id" example:"1"`
 	Type                  string `json:"type" example:"telegram"`

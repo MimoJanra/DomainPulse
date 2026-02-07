@@ -1,8 +1,16 @@
 {
+    "schemes": [
+        "http"
+    ],
     "swagger": "2.0",
     "info": {
-        "contact": {}
+        "description": "REST API для мониторинга доменов и HTTP-проверок.",
+        "title": "DomainPulse API",
+        "contact": {},
+        "version": "1.0"
     },
+    "host": "localhost:8080",
+    "basePath": "/",
     "paths": {
         "/checks": {
             "get": {
@@ -28,7 +36,7 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check"
+                                "$ref": "#/definitions/models.Check"
                             }
                         }
                     }
@@ -61,7 +69,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check"
+                            "$ref": "#/definitions/models.Check"
                         }
                     },
                     "400": {
@@ -108,7 +116,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check"
+                            "$ref": "#/definitions/models.Check"
                         }
                     },
                     "400": {
@@ -311,7 +319,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalResponse"
+                            "$ref": "#/definitions/models.TimeIntervalResponse"
                         }
                     },
                     "400": {
@@ -331,48 +339,15 @@
         },
         "/checks/{id}/results": {
             "get": {
-                "description": "Возвращает список результатов для конкретной проверки с фильтрацией по периоду и пагинацией\nВозвращает список результатов для конкретной проверки с фильтрацией по периоду и пагинацией",
+                "description": "Возвращает список результатов для конкретной проверки с фильтрацией по периоду и пагинацией",
                 "produces": [
-                    "application/json",
                     "application/json"
                 ],
                 "tags": [
-                    "results",
                     "results"
                 ],
                 "summary": "Получить результаты проверки",
                 "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "ID проверки",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Начало периода",
-                        "name": "from",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Конец периода",
-                        "name": "to",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Номер страницы",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Размер страницы",
-                        "name": "page_size",
-                        "in": "query"
-                    },
                     {
                         "type": "integer",
                         "description": "ID проверки",
@@ -409,7 +384,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.ResultsResponse"
+                            "$ref": "#/definitions/models.ResultsResponse"
                         }
                     },
                     "400": {
@@ -456,7 +431,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.StatsResponse"
+                            "$ref": "#/definitions/models.StatsResponse"
                         }
                     },
                     "400": {
@@ -514,7 +489,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalResponse"
+                            "$ref": "#/definitions/models.TimeIntervalResponse"
                         }
                     }
                 }
@@ -536,7 +511,7 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Domain"
+                                "$ref": "#/definitions/models.Domain"
                             }
                         }
                     }
@@ -569,7 +544,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Domain"
+                            "$ref": "#/definitions/models.Domain"
                         }
                     },
                     "400": {
@@ -644,7 +619,7 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check"
+                                "$ref": "#/definitions/models.Check"
                             }
                         }
                     },
@@ -690,7 +665,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Check"
+                            "$ref": "#/definitions/models.Check"
                         }
                     },
                     "400": {
@@ -718,7 +693,7 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings"
+                                "$ref": "#/definitions/models.NotificationSettings"
                             }
                         }
                     }
@@ -751,7 +726,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings"
+                            "$ref": "#/definitions/models.NotificationSettings"
                         }
                     },
                     "400": {
@@ -798,7 +773,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings"
+                            "$ref": "#/definitions/models.NotificationSettings"
                         }
                     },
                     "400": {
@@ -926,13 +901,11 @@
         },
         "/results": {
             "get": {
-                "description": "Возвращает список всех результатов проверок\nВозвращает список всех результатов проверок",
+                "description": "Возвращает список всех результатов проверок",
                 "produces": [
-                    "application/json",
                     "application/json"
                 ],
                 "tags": [
-                    "results",
                     "results"
                 ],
                 "summary": "Получить результаты проверок",
@@ -942,7 +915,7 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Result"
+                                "$ref": "#/definitions/models.Result"
                             }
                         }
                     }
@@ -972,7 +945,7 @@
         }
     },
     "definitions": {
-        "github_com_MimoJanra_DomainPulse_internal_models.Check": {
+        "models.Check": {
             "type": "object",
             "properties": {
                 "domain_id": {
@@ -992,7 +965,7 @@
                     "example": 60
                 },
                 "params": {
-                    "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.CheckParams"
+                    "$ref": "#/definitions/models.CheckParams"
                 },
                 "path": {
                     "type": "string",
@@ -1012,7 +985,7 @@
                 }
             }
         },
-        "github_com_MimoJanra_DomainPulse_internal_models.CheckParams": {
+        "models.CheckParams": {
             "type": "object",
             "properties": {
                 "body": {
@@ -1055,7 +1028,7 @@
                 }
             }
         },
-        "github_com_MimoJanra_DomainPulse_internal_models.Domain": {
+        "models.Domain": {
             "type": "object",
             "properties": {
                 "id": {
@@ -1068,7 +1041,7 @@
                 }
             }
         },
-        "github_com_MimoJanra_DomainPulse_internal_models.LatencyStats": {
+        "models.LatencyStats": {
             "type": "object",
             "properties": {
                 "avg": {
@@ -1097,7 +1070,7 @@
                 }
             }
         },
-        "github_com_MimoJanra_DomainPulse_internal_models.NotificationSettings": {
+        "models.NotificationSettings": {
             "type": "object",
             "properties": {
                 "chat_id": {
@@ -1142,7 +1115,7 @@
                 }
             }
         },
-        "github_com_MimoJanra_DomainPulse_internal_models.Result": {
+        "models.Result": {
             "type": "object",
             "properties": {
                 "check_id": {
@@ -1179,7 +1152,7 @@
                 }
             }
         },
-        "github_com_MimoJanra_DomainPulse_internal_models.ResultsResponse": {
+        "models.ResultsResponse": {
             "type": "object",
             "properties": {
                 "page": {
@@ -1191,7 +1164,7 @@
                 "results": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.Result"
+                        "$ref": "#/definitions/models.Result"
                     }
                 },
                 "total": {
@@ -1202,11 +1175,11 @@
                 }
             }
         },
-        "github_com_MimoJanra_DomainPulse_internal_models.StatsResponse": {
+        "models.StatsResponse": {
             "type": "object",
             "properties": {
                 "latency_stats": {
-                    "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.LatencyStats"
+                    "$ref": "#/definitions/models.LatencyStats"
                 },
                 "status_distribution": {
                     "type": "object",
@@ -1220,7 +1193,7 @@
                 }
             }
         },
-        "github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalData": {
+        "models.TimeIntervalData": {
             "type": "object",
             "properties": {
                 "avg_latency": {
@@ -1259,13 +1232,13 @@
                 }
             }
         },
-        "github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalResponse": {
+        "models.TimeIntervalResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_MimoJanra_DomainPulse_internal_models.TimeIntervalData"
+                        "$ref": "#/definitions/models.TimeIntervalData"
                     }
                 },
                 "interval": {
