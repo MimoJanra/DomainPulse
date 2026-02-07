@@ -102,8 +102,7 @@ async function loadDomains() {
             return;
         }
 
-        const loadingEl = listEl.querySelector('.spinner-border, .text-muted');
-        if (loadingEl && loadingEl.textContent.includes('Загрузка')) listEl.innerHTML = '';
+        if (listEl.querySelector('.spinner-border') || listEl.innerHTML.includes('Загрузка')) listEl.innerHTML = '';
 
         const existingDomainIds = new Set(domains.map(d => d.id));
 
@@ -206,23 +205,26 @@ async function updateAllDomainCharts(domains) {
 
 function createDomainElement(domain) {
     const div = document.createElement('div');
-    div.className = 'card';
+    div.className = 'card mb-3';
     div.id = `domain-${domain.id}`;
     div.innerHTML = `
-        <div class="card-body">
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                <h5 class="card-title mb-0">${escapeHtml(domain.name)}</h5>
-                <div class="btn-group btn-group-sm">
-                    <button class="btn btn-primary" onclick="openCheckModal(${domain.id})">+ Проверка</button>
-                    <button class="btn btn-danger" onclick="deleteDomain(${domain.id})">Удалить</button>
-                </div>
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">${escapeHtml(domain.name)}</h5>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-primary" onclick="openCheckModal(${domain.id})">+ Проверка</button>
+                <button class="btn btn-danger" onclick="deleteDomain(${domain.id})">Удалить</button>
             </div>
-            <div class="position-relative w-100 mb-3" style="height: 200px; cursor: pointer;" onclick="viewDomainResults(${domain.id})">
-                <canvas id="domainChart-${domain.id}"></canvas>
-            </div>
-            <div id="checks-${domain.id}">
-                <p class="text-center text-muted py-3 mb-0"><span class="spinner-border spinner-border-sm me-2" role="status"></span>Загрузка проверок...</p>
-            </div>
+        </div>
+        <div class="position-relative w-100" style="height: 200px; cursor: pointer;" onclick="viewDomainResults(${domain.id})">
+            <canvas id="domainChart-${domain.id}"></canvas>
+        </div>
+        <div class="card-body py-2">
+            <h6 class="card-subtitle text-muted mb-2">Проверки</h6>
+            <ul class="list-group list-group-flush" id="checks-${domain.id}">
+                <li class="list-group-item text-center text-muted py-3 mb-0 border-0">
+                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>Загрузка проверок...
+                </li>
+            </ul>
         </div>
     `;
     return div;
@@ -236,21 +238,21 @@ async function loadChecksForDomain(domainId) {
         const checks = await apiCall(`/domains/${domainId}/checks`);
 
         if (!checks || !Array.isArray(checks)) {
-            checksEl.innerHTML = '<div class="alert alert-danger">Ошибка: неверный формат ответа от сервера</div>';
+            checksEl.innerHTML = '<li class="list-group-item"><div class="alert alert-danger py-2 mb-0">Ошибка: неверный формат ответа от сервера</div></li>';
             return;
         }
 
         domainChecksCache.set(domainId, checks);
 
         if (checks.length === 0) {
-            checksEl.innerHTML = '<p class="text-center text-muted py-2 mb-0">Нет проверок</p>';
+            checksEl.innerHTML = '<li class="list-group-item text-center text-muted py-2 border-0">Нет проверок</li>';
             return;
         }
 
         const newCheckIds = new Set(checks.map(c => c.id));
         const existingCheckIds = new Set();
 
-        checksEl.querySelectorAll('[id^="check-"]').forEach(el => {
+        checksEl.querySelectorAll('li[id^="check-"]').forEach(el => {
             const checkId = parseInt(el.id.replace('check-', ''));
             if (!newCheckIds.has(checkId)) {
                 if (checkCharts.has(checkId)) {
@@ -263,7 +265,7 @@ async function loadChecksForDomain(domainId) {
             }
         });
 
-        checksEl.querySelectorAll(':scope > p, :scope > .alert').forEach(el => el.remove());
+        checksEl.querySelectorAll(':scope > li:not([id^="check-"])').forEach(el => el.remove());
 
         // Добавляем/обновляем элементы проверок
         for (const check of checks) {
@@ -277,7 +279,7 @@ async function loadChecksForDomain(domainId) {
             }
         }
     } catch (error) {
-        // Не затираем содержимое при ошибке обновления (чтобы не скакать)
+        checksEl.innerHTML = `<li class="list-group-item"><div class="alert alert-danger py-2 mb-0">Ошибка загрузки проверок: ${escapeHtml(error.message)}</div></li>`;
         console.error(`Ошибка загрузки проверок для домена ${domainId}:`, error);
     }
 }
@@ -303,10 +305,10 @@ function updateCheckElement(el, check) {
 }
 
 function createCheckElement(check) {
-    const div = document.createElement('div');
-    div.className = 'card mb-2';
-    div.id = `check-${check.id}`;
-    div.setAttribute('data-check-type', (check.type || 'unknown').toLowerCase());
+    const li = document.createElement('li');
+    li.className = 'list-group-item d-flex justify-content-between align-items-start flex-wrap gap-2';
+    li.id = `check-${check.id}`;
+    li.setAttribute('data-check-type', (check.type || 'unknown').toLowerCase());
 
     let details = `Интервал: ${check.interval_seconds || 0}с`;
     if (check.params) {
@@ -316,30 +318,33 @@ function createCheckElement(check) {
     if (check.realtime_mode) details += ` | Реальное время`;
 
     const checkType = (check.type || 'unknown').toLowerCase();
-    const typeBadge = { http: 'bg-info', icmp: 'bg-primary', tcp: 'bg-warning text-dark', udp: 'bg-success', tls: 'bg-danger' }[checkType] || 'bg-secondary';
+    const typeBadges = {
+        http: 'bg-info',
+        icmp: 'bg-primary',
+        tcp: 'bg-warning text-dark',
+        udp: 'bg-success',
+        tls: 'bg-dark'
+    };
+    const typeBadge = typeBadges[checkType] || 'bg-secondary';
     const statusBadge = check.enabled ? 'bg-success' : 'bg-secondary';
 
-    div.innerHTML = `
-        <div class="card-body py-2">
-            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
-                <div>
-                    <span class="badge ${typeBadge} me-1">${checkType.toUpperCase()}</span>
-                    <span class="badge ${statusBadge}" data-status>${check.enabled ? 'Включена' : 'Отключена'}</span>
-                    <div class="small text-muted mt-1">${details}</div>
-                </div>
-                <div class="btn-group btn-group-sm">
-                    <button class="btn btn-primary" onclick="viewCheckResults(${check.id})">Результаты</button>
-                    <button class="btn btn-outline-dark" onclick="editCheck(${check.id})" title="Редактировать">⚙️</button>
-                    ${check.enabled
-                        ? `<button class="btn btn-outline-dark" onclick="toggleCheck(${check.id}, false)">Отключить</button>`
-                        : `<button class="btn btn-success" onclick="toggleCheck(${check.id}, true)">Включить</button>`
-                    }
-                    <button class="btn btn-danger" onclick="deleteCheck(${check.id})">Удалить</button>
-                </div>
-            </div>
+    li.innerHTML = `
+        <div>
+            <span class="badge ${typeBadge} me-1">${checkType.toUpperCase()}</span>
+            <span class="badge ${statusBadge}" data-status>${check.enabled ? 'Включена' : 'Отключена'}</span>
+            <div class="small text-muted mt-1">${details}</div>
+        </div>
+        <div class="btn-group btn-group-sm">
+            <button class="btn btn-primary btn-sm" onclick="viewCheckResults(${check.id})">Результаты</button>
+            <button class="btn btn-outline-dark btn-sm" onclick="editCheck(${check.id})" title="Редактировать">⚙️</button>
+            ${check.enabled
+                ? `<button class="btn btn-outline-dark btn-sm" onclick="toggleCheck(${check.id}, false)">Отключить</button>`
+                : `<button class="btn btn-success btn-sm" onclick="toggleCheck(${check.id}, true)">Включить</button>`
+            }
+            <button class="btn btn-danger btn-sm" onclick="deleteCheck(${check.id})">Удалить</button>
         </div>
     `;
-    return div;
+    return li;
 }
 
 // Добавление домена
