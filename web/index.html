@@ -4,215 +4,239 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DomainPulse - Мониторинг доменов</title>
+    <link rel="stylesheet" href="https://bootswatch.com/5/brite/bootstrap.min.css">
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🌐 DomainPulse</h1>
-            <p class="subtitle">Мониторинг доменов и проверка доступности</p>
+    <!-- Toast notification container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <div class="container py-4">
+        <header class="text-center mb-4 pb-3 border-bottom">
+            <h1><span class="logo-icon">&#9679;</span> DomainPulse</h1>
+            <p class="text-muted">Мониторинг доменов и проверка доступности</p>
         </header>
 
         <div class="main-content">
             <!-- Секция добавления домена или IP -->
-            <section class="card">
-                <h2>Добавить домен или IP</h2>
-                <form id="addDomainForm" class="form">
-                    <div class="form-group">
-                        <input type="text" id="domainName" placeholder="example.com или 192.168.1.1" required>
-                        <button type="submit">Добавить</button>
-                    </div>
-                </form>
-            </section>
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h2 class="card-title h5 mb-3">Добавить домен или IP</h2>
+                    <form id="addDomainForm">
+                        <div class="d-flex gap-2">
+                            <input type="text" class="form-control" id="domainName" placeholder="example.com или 192.168.1.1" required>
+                            <button type="submit" class="btn btn-primary flex-shrink-0">Добавить</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
 
             <!-- Список доменов -->
-            <section class="card">
-                <h2>Мониторируемые домены</h2>
-                <div id="domainsList" class="domains-list">
-                    <p class="loading">Загрузка...</p>
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="card-title h5 mb-3">Мониторируемые домены</h2>
+                    <div id="domainsList" class="domains-list">
+                        <p class="loading">Загрузка...</p>
+                    </div>
                 </div>
-            </section>
+            </div>
         </div>
     </div>
 
     <!-- Модальное окно для создания проверки -->
     <div id="checkModal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2>Создать проверку</h2>
-            <form id="addCheckForm" class="form">
-                <input type="hidden" id="checkDomainId">
-                <div class="form-group">
-                    <label>Тип проверки:</label>
-                    <select id="checkType" required>
-                        <option value="http">HTTP</option>
-                        <option value="icmp">ICMP</option>
-                        <option value="tcp">TCP</option>
-                        <option value="udp">UDP</option>
-                        <option value="tls">TLS (постоянное соединение)</option>
-                    </select>
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title h5">Создать проверку</h2>
+                    <button type="button" class="btn-close close"></button>
                 </div>
-                <div class="form-group">
-                    <label>Интервал проверки:</label>
-                    <select id="checkIntervalType" required>
-                        <option value="second">Раз в секунду</option>
-                        <option value="minute" selected>Раз в минуту</option>
-                        <option value="hour">Раз в час</option>
-                        <option value="day">Раз в день</option>
-                    </select>
-                    <input type="number" id="checkInterval" value="1" min="1" style="margin-top: 5px;" placeholder="Количество">
+                <div class="modal-body">
+                    <form id="addCheckForm">
+                        <input type="hidden" id="checkDomainId">
+                        <div class="mb-3">
+                            <label class="form-label">Тип проверки:</label>
+                            <select class="form-select" id="checkType" required>
+                                <option value="http">HTTP</option>
+                                <option value="icmp">ICMP</option>
+                                <option value="tcp">TCP</option>
+                                <option value="udp">UDP</option>
+                                <option value="tls">TLS (постоянное соединение)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Интервал проверки:</label>
+                            <select class="form-select" id="checkIntervalType" required>
+                                <option value="second">Раз в секунду</option>
+                                <option value="minute" selected>Раз в минуту</option>
+                                <option value="hour">Раз в час</option>
+                                <option value="day">Раз в день</option>
+                            </select>
+                            <input type="number" class="form-control mt-2" id="checkInterval" value="1" min="1" placeholder="Количество">
+                        </div>
+                        <div id="httpParams" class="mb-3">
+                            <label class="form-label">Схема (для HTTP):</label>
+                            <select class="form-select" id="checkScheme">
+                                <option value="https" selected>HTTPS</option>
+                                <option value="http">HTTP</option>
+                            </select>
+                            <label class="form-label mt-2">Путь (для HTTP):</label>
+                            <input type="text" class="form-control" id="checkPath" placeholder="/">
+                            <label class="form-label mt-2">Метод запроса (для HTTP):</label>
+                            <select class="form-select" id="checkMethod">
+                                <option value="GET" selected>GET</option>
+                                <option value="POST">POST</option>
+                                <option value="PUT">PUT</option>
+                                <option value="PATCH">PATCH</option>
+                                <option value="DELETE">DELETE</option>
+                            </select>
+                            <label class="form-label mt-2">Тело запроса (для POST/PUT, опционально):</label>
+                            <textarea class="form-control" id="checkBody" placeholder='{"key": "value"}' rows="3"></textarea>
+                        </div>
+                        <div id="portParams" class="mb-3" style="display: none;">
+                            <label class="form-label">Порт (для TCP/UDP/TLS):</label>
+                            <input type="number" class="form-control" id="checkPort" min="1" max="65535">
+                        </div>
+                        <div id="tcpParams" class="mb-3" style="display: none;">
+                            <label class="form-label">Контент (для TCP, опционально):</label>
+                            <input type="text" class="form-control" id="checkTcpPayload" placeholder="data">
+                        </div>
+                        <div id="udpParams" class="mb-3" style="display: none;">
+                            <label class="form-label">Payload (для UDP, опционально):</label>
+                            <input type="text" class="form-control" id="checkPayload" placeholder="ping">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Таймаут (мс):</label>
+                            <input type="number" class="form-control" id="checkTimeout" value="5000" min="1000">
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="checkRealtime">
+                            <label class="form-check-label" for="checkRealtime">Режим реального времени</label>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Лимит запросов в минуту:</label>
+                            <input type="number" class="form-control" id="checkRateLimit" value="0" min="0" placeholder="0 = без лимита">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Создать проверку</button>
+                    </form>
                 </div>
-                <div class="form-group" id="httpParams">
-                    <label>Схема (для HTTP):</label>
-                    <select id="checkScheme">
-                        <option value="https" selected>HTTPS</option>
-                        <option value="http">HTTP</option>
-                    </select>
-                    <label style="margin-top: 10px;">Путь (для HTTP):</label>
-                    <input type="text" id="checkPath" placeholder="/">
-                    <label style="margin-top: 10px;">Метод запроса (для HTTP):</label>
-                    <select id="checkMethod">
-                        <option value="GET" selected>GET</option>
-                        <option value="POST">POST</option>
-                        <option value="PUT">PUT</option>
-                        <option value="PATCH">PATCH</option>
-                        <option value="DELETE">DELETE</option>
-                    </select>
-                    <label style="margin-top: 10px;">Тело запроса (для POST/PUT, опционально):</label>
-                    <textarea id="checkBody" placeholder='{"key": "value"}' rows="3"></textarea>
-                </div>
-                <div class="form-group" id="portParams" style="display: none;">
-                    <label>Порт (для TCP/UDP/TLS):</label>
-                    <input type="number" id="checkPort" min="1" max="65535">
-                </div>
-                <div class="form-group" id="tcpParams" style="display: none;">
-                    <label>Контент (для TCP, опционально):</label>
-                    <input type="text" id="checkTcpPayload" placeholder="data">
-                </div>
-                <div class="form-group" id="udpParams" style="display: none;">
-                    <label>Payload (для UDP, опционально):</label>
-                    <input type="text" id="checkPayload" placeholder="ping">
-                </div>
-                <div class="form-group">
-                    <label>Таймаут (мс):</label>
-                    <input type="number" id="checkTimeout" value="5000" min="1000">
-                </div>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="checkRealtime"> Режим реального времени
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label>Лимит запросов в минуту:</label>
-                    <input type="number" id="checkRateLimit" value="0" min="0" placeholder="0 = без лимита">
-                </div>
-                <button type="submit">Создать проверку</button>
-            </form>
+            </div>
         </div>
     </div>
 
     <!-- Модальное окно для редактирования проверки -->
     <div id="editCheckModal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2>Редактировать проверку</h2>
-            <form id="editCheckForm" class="form">
-                <input type="hidden" id="editCheckId">
-                <input type="hidden" id="editCheckDomainId">
-                <div class="form-group">
-                    <label>Тип проверки:</label>
-                    <select id="editCheckType" required>
-                        <option value="http">HTTP</option>
-                        <option value="icmp">ICMP</option>
-                        <option value="tcp">TCP</option>
-                        <option value="udp">UDP</option>
-                        <option value="tls">TLS (постоянное соединение)</option>
-                    </select>
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title h5">Редактировать проверку</h2>
+                    <button type="button" class="btn-close close"></button>
                 </div>
-                <div class="form-group">
-                    <label>Интервал проверки:</label>
-                    <select id="editCheckIntervalType" required>
-                        <option value="second">Раз в секунду</option>
-                        <option value="minute" selected>Раз в минуту</option>
-                        <option value="hour">Раз в час</option>
-                        <option value="day">Раз в день</option>
-                    </select>
-                    <input type="number" id="editCheckInterval" value="1" min="1" style="margin-top: 5px;" placeholder="Количество">
+                <div class="modal-body">
+                    <form id="editCheckForm">
+                        <input type="hidden" id="editCheckId">
+                        <input type="hidden" id="editCheckDomainId">
+                        <div class="mb-3">
+                            <label class="form-label">Тип проверки:</label>
+                            <select class="form-select" id="editCheckType" required>
+                                <option value="http">HTTP</option>
+                                <option value="icmp">ICMP</option>
+                                <option value="tcp">TCP</option>
+                                <option value="udp">UDP</option>
+                                <option value="tls">TLS (постоянное соединение)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Интервал проверки:</label>
+                            <select class="form-select" id="editCheckIntervalType" required>
+                                <option value="second">Раз в секунду</option>
+                                <option value="minute" selected>Раз в минуту</option>
+                                <option value="hour">Раз в час</option>
+                                <option value="day">Раз в день</option>
+                            </select>
+                            <input type="number" class="form-control mt-2" id="editCheckInterval" value="1" min="1" placeholder="Количество">
+                        </div>
+                        <div id="editHttpParams" class="mb-3">
+                            <label class="form-label">Схема (для HTTP):</label>
+                            <select class="form-select" id="editCheckScheme">
+                                <option value="https" selected>HTTPS</option>
+                                <option value="http">HTTP</option>
+                            </select>
+                            <label class="form-label mt-2">Путь (для HTTP):</label>
+                            <input type="text" class="form-control" id="editCheckPath" placeholder="/">
+                            <label class="form-label mt-2">Метод запроса (для HTTP):</label>
+                            <select class="form-select" id="editCheckMethod">
+                                <option value="GET" selected>GET</option>
+                                <option value="POST">POST</option>
+                                <option value="PUT">PUT</option>
+                                <option value="PATCH">PATCH</option>
+                                <option value="DELETE">DELETE</option>
+                            </select>
+                            <label class="form-label mt-2">Тело запроса (для POST/PUT, опционально):</label>
+                            <textarea class="form-control" id="editCheckBody" placeholder='{"key": "value"}' rows="3"></textarea>
+                        </div>
+                        <div id="editPortParams" class="mb-3" style="display: none;">
+                            <label class="form-label">Порт (для TCP/UDP/TLS):</label>
+                            <input type="number" class="form-control" id="editCheckPort" min="1" max="65535">
+                        </div>
+                        <div id="editTcpParams" class="mb-3" style="display: none;">
+                            <label class="form-label">Контент (для TCP, опционально):</label>
+                            <input type="text" class="form-control" id="editCheckTcpPayload" placeholder="data">
+                        </div>
+                        <div id="editUdpParams" class="mb-3" style="display: none;">
+                            <label class="form-label">Payload (для UDP, опционально):</label>
+                            <input type="text" class="form-control" id="editCheckPayload" placeholder="ping">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Таймаут (мс):</label>
+                            <input type="number" class="form-control" id="editCheckTimeout" value="5000" min="1000">
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="editCheckRealtime">
+                            <label class="form-check-label" for="editCheckRealtime">Режим реального времени</label>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Лимит запросов в минуту:</label>
+                            <input type="number" class="form-control" id="editCheckRateLimit" value="0" min="0" placeholder="0 = без лимита">
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">Сохранить</button>
+                            <button type="button" id="deleteCheckBtn" class="btn btn-danger">Удалить</button>
+                        </div>
+                    </form>
                 </div>
-                <div class="form-group" id="editHttpParams">
-                    <label>Схема (для HTTP):</label>
-                    <select id="editCheckScheme">
-                        <option value="https" selected>HTTPS</option>
-                        <option value="http">HTTP</option>
-                    </select>
-                    <label style="margin-top: 10px;">Путь (для HTTP):</label>
-                    <input type="text" id="editCheckPath" placeholder="/">
-                    <label style="margin-top: 10px;">Метод запроса (для HTTP):</label>
-                    <select id="editCheckMethod">
-                        <option value="GET" selected>GET</option>
-                        <option value="POST">POST</option>
-                        <option value="PUT">PUT</option>
-                        <option value="PATCH">PATCH</option>
-                        <option value="DELETE">DELETE</option>
-                    </select>
-                    <label style="margin-top: 10px;">Тело запроса (для POST/PUT, опционально):</label>
-                    <textarea id="editCheckBody" placeholder='{"key": "value"}' rows="3"></textarea>
-                </div>
-                <div class="form-group" id="editPortParams" style="display: none;">
-                    <label>Порт (для TCP/UDP/TLS):</label>
-                    <input type="number" id="editCheckPort" min="1" max="65535">
-                </div>
-                <div class="form-group" id="editTcpParams" style="display: none;">
-                    <label>Контент (для TCP, опционально):</label>
-                    <input type="text" id="editCheckTcpPayload" placeholder="data">
-                </div>
-                <div class="form-group" id="editUdpParams" style="display: none;">
-                    <label>Payload (для UDP, опционально):</label>
-                    <input type="text" id="editCheckPayload" placeholder="ping">
-                </div>
-                <div class="form-group">
-                    <label>Таймаут (мс):</label>
-                    <input type="number" id="editCheckTimeout" value="5000" min="1000">
-                </div>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="editCheckRealtime"> Режим реального времени
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label>Лимит запросов в минуту:</label>
-                    <input type="number" id="editCheckRateLimit" value="0" min="0" placeholder="0 = без лимита">
-                </div>
-                <div style="display: flex; gap: 10px;">
-                    <button type="submit">Сохранить</button>
-                    <button type="button" id="deleteCheckBtn" style="background-color: #e74c3c;">Удалить</button>
-                </div>
-            </form>
+            </div>
         </div>
     </div>
 
     <!-- Модальное окно для просмотра результатов -->
     <div id="resultsModal" class="modal">
-        <div class="modal-content large">
-            <span class="close">&times;</span>
-            <h2>Результаты проверки</h2>
-            <div id="checkStats" class="stats-container"></div>
-            <div class="chart-controls" style="margin: 20px 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                <label for="intervalSelect">Период:</label>
-                <select id="intervalSelect" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #ddd;">
-                    <option value="1m">1 минута</option>
-                    <option value="5m">5 минут</option>
-                    <option value="1h">1 час</option>
-                </select>
-                <button id="resetZoomBtn" class="btn btn-small" style="margin-left: 10px;">Сбросить масштаб</button>
-                <button id="applyPeriodBtn" class="btn btn-primary btn-small">Применить период к графику домена</button>
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title h5">Результаты проверки</h2>
+                    <button type="button" class="btn-close close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="checkStats" class="stats-container"></div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap my-3">
+                        <label class="form-label mb-0" for="intervalSelect">Период:</label>
+                        <select class="form-select form-select-sm" id="intervalSelect" style="width: auto;">
+                            <option value="1m">1 минута</option>
+                            <option value="5m">5 минут</option>
+                            <option value="1h">1 час</option>
+                        </select>
+                        <button id="resetZoomBtn" class="btn btn-outline-secondary btn-sm">Сбросить масштаб</button>
+                        <button id="applyPeriodBtn" class="btn btn-primary btn-sm">Применить к графику домена</button>
+                    </div>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="checkChart"></canvas>
+                    </div>
+                    <div id="resultsList" class="results-list"></div>
+                </div>
             </div>
-            <div class="chart-container" style="height: 300px;">
-                <canvas id="checkChart"></canvas>
-            </div>
-            <div id="resultsList" class="results-list"></div>
         </div>
     </div>
 

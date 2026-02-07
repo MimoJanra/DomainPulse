@@ -1,20 +1,27 @@
 const API_BASE = '';
 
 // Утилиты
+function showToast(message, type) {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    const icon = type === 'error' ? '&#10005;' : '&#10003;';
+    toast.innerHTML = `<span class="toast-icon">${icon}</span><span>${escapeHtml(message)}</span>`;
+    container.appendChild(toast);
+    const duration = type === 'error' ? 5000 : 3000;
+    setTimeout(() => {
+        toast.classList.add('toast-out');
+        toast.addEventListener('animationend', () => toast.remove());
+    }, duration);
+}
+
 function showError(message) {
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'error';
-    errorDiv.textContent = message;
-    document.querySelector('.main-content').insertBefore(errorDiv, document.querySelector('.main-content').firstChild);
-    setTimeout(() => errorDiv.remove(), 5000);
+    showToast(message, 'error');
 }
 
 function showSuccess(message) {
-    const successDiv = document.createElement('div');
-    successDiv.className = 'success';
-    successDiv.textContent = message;
-    document.querySelector('.main-content').insertBefore(successDiv, document.querySelector('.main-content').firstChild);
-    setTimeout(() => successDiv.remove(), 3000);
+    showToast(message, 'success');
 }
 
 async function apiCall(endpoint, options = {}) {
@@ -53,83 +60,141 @@ async function apiCall(endpoint, options = {}) {
     }
 }
 
+// Chart.js light theme defaults (Brite)
+Chart.defaults.color = '#212529';
+Chart.defaults.borderColor = '#dee2e6';
+Chart.defaults.plugins.legend.labels.color = '#495057';
+Chart.defaults.scale.grid = { ...Chart.defaults.scale.grid, color: '#dee2e6' };
+
+// Кэш проверок по домену (используется для обновления графиков без лишних запросов)
+const domainChecksCache = new Map();
+
 // Загрузка доменов
 async function loadDomains() {
     const listEl = document.getElementById('domainsList');
     const currentDomains = new Set();
-    
+
     try {
         const domains = await apiCall('/domains');
-        
+
         if (!domains || !Array.isArray(domains)) {
             if (listEl.innerHTML.includes('loading') || listEl.innerHTML.includes('Загрузка')) {
                 listEl.innerHTML = '<div class="error">Ошибка: неверный формат ответа от сервера</div>';
             }
             return;
         }
-        
+
         if (domains.length === 0) {
-            // Очищаем все графики, если доменов нет
             domainCharts.forEach((chart) => chart.destroy());
             domainCharts.clear();
             checkCharts.forEach((chart) => chart.destroy());
             checkCharts.clear();
-            if (listEl.innerHTML.includes('loading') || listEl.innerHTML.includes('Загрузка')) {
-                listEl.innerHTML = '<div class="empty-state">Нет доменов для мониторинга</div>';
-            }
+            domainChecksCache.clear();
+            listEl.innerHTML = '<div class="empty-state">Нет доменов для мониторинга</div>';
             return;
         }
-        
-        // Сохраняем существующие графики для доменов, которые остаются
-        const existingDomainIds = new Set();
-        domains.forEach(domain => existingDomainIds.add(domain.id));
-        
-        // Удаляем графики для доменов, которых больше нет
+
+        // Убираем сообщение "Загрузка" / empty-state если оно есть
+        const loadingEl = listEl.querySelector('.loading, .empty-state');
+        if (loadingEl) listEl.innerHTML = '';
+
+        const existingDomainIds = new Set(domains.map(d => d.id));
+
+        // Удаляем графики и элементы для доменов, которых больше нет
         domainCharts.forEach((chart, domainId) => {
             if (!existingDomainIds.has(domainId)) {
                 chart.destroy();
                 domainCharts.delete(domainId);
             }
         });
-        
-        // Обновляем или создаем элементы доменов
-        for (const domain of domains) {
-            currentDomains.add(domain.id);
-            let domainEl = document.getElementById(`domain-${domain.id}`);
-            
-            if (!domainEl) {
-                // Создаем новый элемент домена
-                domainEl = createDomainElement(domain);
-                listEl.appendChild(domainEl);
-                await loadChecksForDomain(domain.id);
-            } else {
-                // Обновляем существующий элемент (проверки)
-                await loadChecksForDomain(domain.id);
-                // Обновляем график домена
-                await new Promise(resolve => setTimeout(resolve, 100));
-                await loadDomainChart(domain.id);
-            }
-        }
-        
-        // Удаляем элементы доменов, которых больше нет
-        const existingElements = listEl.querySelectorAll('.domain-item');
-        existingElements.forEach(el => {
+        listEl.querySelectorAll('.domain-item').forEach(el => {
             const domainId = parseInt(el.id.replace('domain-', ''));
-            if (!currentDomains.has(domainId)) {
-                // Удаляем график перед удалением элемента
-                if (domainCharts.has(domainId)) {
-                    domainCharts.get(domainId).destroy();
-                    domainCharts.delete(domainId);
-                }
+            if (!existingDomainIds.has(domainId)) {
+                domainChecksCache.delete(domainId);
                 el.remove();
             }
         });
-        
+
+        // Создаём только новые элементы доменов, существующие не трогаем
+        for (const domain of domains) {
+            currentDomains.add(domain.id);
+            if (!document.getElementById(`domain-${domain.id}`)) {
+                const domainEl = createDomainElement(domain);
+                listEl.appendChild(domainEl);
+                await loadChecksForDomain(domain.id);
+            }
+        }
+
+        // Обновляем графики всех доменов параллельно
+        await updateAllDomainCharts(domains);
+
     } catch (error) {
         if (listEl.innerHTML.includes('loading') || listEl.innerHTML.includes('Загрузка')) {
             listEl.innerHTML = `<div class="error">Ошибка загрузки: ${error.message}</div>`;
         }
     }
+}
+
+// Параллельное обновление графиков всех доменов
+async function updateAllDomainCharts(domains) {
+    const to = new Date();
+    to.setSeconds(0, 0);
+    const from = new Date(to.getTime() - 10 * 60 * 1000);
+    const fromStr = from.toISOString();
+    const toStr = to.toISOString();
+
+    await Promise.all(domains.map(async (domain) => {
+        try {
+            const ctx = document.getElementById(`domainChart-${domain.id}`);
+            if (!ctx) return;
+
+            // Используем кэш проверок или загружаем
+            let checks = domainChecksCache.get(domain.id);
+            if (!checks) {
+                checks = await apiCall(`/domains/${domain.id}/checks`);
+                if (checks && Array.isArray(checks)) {
+                    domainChecksCache.set(domain.id, checks);
+                }
+            }
+            if (!checks || !Array.isArray(checks) || checks.length === 0) return;
+
+            // Загружаем результаты всех проверок параллельно
+            const resultsArrays = await Promise.all(
+                checks.map(check =>
+                    apiCall(`/checks/${check.id}/results?from=${encodeURIComponent(fromStr)}&to=${encodeURIComponent(toStr)}&page=1&page_size=100`)
+                        .then(r => (r && r.results && Array.isArray(r.results)) ? r.results : [])
+                        .catch(() => [])
+                )
+            );
+            const allResults = resultsArrays.flat();
+
+            const aggregatedData = aggregateResultsByMinute(allResults, false);
+            const labels = aggregatedData.map(item => {
+                const date = new Date(item.timestamp.replace(' ', 'T') + 'Z');
+                return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            });
+            const successData = aggregatedData.map(item => item.success_count || 0);
+            const failureData = aggregatedData.map(item => item.failure_count || 0);
+            const latencyData = aggregatedData.map(item => item.avg_latency || 0);
+
+            if (domainCharts.has(domain.id)) {
+                const chart = domainCharts.get(domain.id);
+                if (chart && chart.canvas && chart.canvas.parentNode) {
+                    chart.data.labels = labels;
+                    chart.data.datasets[0].data = successData;
+                    chart.data.datasets[1].data = failureData;
+                    chart.data.datasets[2].data = latencyData;
+                    chart.update('none');
+                    return;
+                }
+                domainCharts.delete(domain.id);
+            }
+
+            createDomainChartInstance(ctx, domain.id, labels, successData, failureData, latencyData);
+        } catch (error) {
+            console.error('Error updating chart for domain', domain.id, error);
+        }
+    }));
 }
 
 function createDomainElement(domain) {
@@ -140,11 +205,11 @@ function createDomainElement(domain) {
         <div class="domain-header">
             <span class="domain-name">${escapeHtml(domain.name)}</span>
             <div class="domain-actions">
-                <button class="btn btn-primary btn-small" onclick="openCheckModal(${domain.id})">+ Проверка</button>
-                <button class="btn btn-danger btn-small" onclick="deleteDomain(${domain.id})">Удалить</button>
+                <button class="btn btn-primary btn-sm" onclick="openCheckModal(${domain.id})">+ Проверка</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteDomain(${domain.id})">Удалить</button>
             </div>
         </div>
-        <div class="domain-chart-container" style="margin-top: 15px; width: 100%; position: relative; height: 200px; cursor: pointer;" onclick="viewDomainResults(${domain.id})">
+        <div class="domain-chart-container" style="margin-top: 12px; width: 100%; position: relative; height: 200px; cursor: pointer;" onclick="viewDomainResults(${domain.id})">
             <canvas id="domainChart-${domain.id}"></canvas>
         </div>
         <div class="checks-list" id="checks-${domain.id}">
@@ -157,32 +222,83 @@ function createDomainElement(domain) {
 async function loadChecksForDomain(domainId) {
     const checksEl = document.getElementById(`checks-${domainId}`);
     if (!checksEl) return;
-    
+
     try {
         const checks = await apiCall(`/domains/${domainId}/checks`);
-        
+
         if (!checks || !Array.isArray(checks)) {
             checksEl.innerHTML = '<div class="error">Ошибка: неверный формат ответа от сервера</div>';
             return;
         }
-        
+
+        // Обновляем кэш проверок
+        domainChecksCache.set(domainId, checks);
+
         if (checks.length === 0) {
-            checksEl.innerHTML = '<p style="color: #999; text-align: center; padding: 10px;">Нет проверок</p>';
+            checksEl.innerHTML = '<p style="color: #6c757d; text-align: center; padding: 10px;">Нет проверок</p>';
             return;
         }
-        
-        checksEl.innerHTML = '';
-        
-        for (const check of checks) {
-            const checkEl = createCheckElement(check);
-            checksEl.appendChild(checkEl);
+
+        // Diff-обновление: обновляем существующие, добавляем новые, удаляем лишние
+        const newCheckIds = new Set(checks.map(c => c.id));
+        const existingCheckIds = new Set();
+
+        // Удаляем элементы проверок, которых больше нет
+        checksEl.querySelectorAll('.check-item').forEach(el => {
+            const checkId = parseInt(el.id.replace('check-', ''));
+            if (!newCheckIds.has(checkId)) {
+                if (checkCharts.has(checkId)) {
+                    checkCharts.get(checkId).destroy();
+                    checkCharts.delete(checkId);
+                }
+                el.remove();
+            } else {
+                existingCheckIds.add(checkId);
+            }
+        });
+
+        // Убираем placeholder текст если он есть
+        const placeholder = checksEl.querySelector('.loading, p');
+        if (placeholder && !placeholder.classList.contains('check-item')) {
+            placeholder.remove();
         }
-        
-        // Загружаем общий график для домена после загрузки всех проверок
-        await new Promise(resolve => setTimeout(resolve, 100));
-        await loadDomainChart(domainId);
+
+        // Добавляем/обновляем элементы проверок
+        for (const check of checks) {
+            const existingEl = document.getElementById(`check-${check.id}`);
+            if (existingEl) {
+                // Обновляем только текстовое содержимое (статус, детали) без пересоздания DOM
+                updateCheckElement(existingEl, check);
+            } else {
+                const checkEl = createCheckElement(check);
+                checksEl.appendChild(checkEl);
+            }
+        }
     } catch (error) {
-        checksEl.innerHTML = `<div class="error">Ошибка загрузки проверок: ${error.message}</div>`;
+        // Не затираем содержимое при ошибке обновления (чтобы не скакать)
+        console.error(`Ошибка загрузки проверок для домена ${domainId}:`, error);
+    }
+}
+
+// Обновление содержимого check-item без пересоздания DOM
+function updateCheckElement(el, check) {
+    const statusEl = el.querySelector('.check-status');
+    if (statusEl) {
+        const statusClass = check.enabled ? 'enabled' : 'disabled';
+        const statusText = check.enabled ? 'Включена' : 'Отключена';
+        statusEl.className = `check-status ${statusClass}`;
+        statusEl.textContent = statusText;
+    }
+
+    const detailsEl = el.querySelector('.check-details');
+    if (detailsEl) {
+        let details = `Интервал: ${check.interval_seconds || 0}с`;
+        if (check.params) {
+            if (check.params.path) details += ` | Путь: ${check.params.path}`;
+            if (check.params.port) details += ` | Порт: ${check.params.port}`;
+        }
+        if (check.realtime_mode) details += ` | Реальное время`;
+        detailsEl.textContent = details;
     }
 }
 
@@ -212,13 +328,13 @@ function createCheckElement(check) {
                 <div class="check-details">${details}</div>
             </div>
             <div class="check-actions">
-                <button class="btn btn-primary btn-small" onclick="viewCheckResults(${check.id})">Результаты</button>
-                <button class="btn btn-small" onclick="editCheck(${check.id})" title="Редактировать">⚙️</button>
-                ${check.enabled 
-                    ? `<button class="btn btn-small" onclick="toggleCheck(${check.id}, false)">Отключить</button>`
-                    : `<button class="btn btn-success btn-small" onclick="toggleCheck(${check.id}, true)">Включить</button>`
+                <button class="btn btn-primary btn-sm" onclick="viewCheckResults(${check.id})">Результаты</button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="editCheck(${check.id})" title="Редактировать">⚙️</button>
+                ${check.enabled
+                    ? `<button class="btn btn-outline-secondary btn-sm" onclick="toggleCheck(${check.id}, false)">Отключить</button>`
+                    : `<button class="btn btn-success btn-sm" onclick="toggleCheck(${check.id}, true)">Включить</button>`
                 }
-                <button class="btn btn-danger btn-small" onclick="deleteCheck(${check.id})">Удалить</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteCheck(${check.id})">Удалить</button>
             </div>
         </div>
     `;
@@ -290,11 +406,14 @@ function updateCheckForm() {
     const portParams = document.getElementById('portParams');
     const tcpParams = document.getElementById('tcpParams');
     const udpParams = document.getElementById('udpParams');
-    
+    const portInput = document.getElementById('checkPort');
+
+    const needsPort = type === 'tcp' || type === 'udp' || type === 'tls';
     httpParams.style.display = type === 'http' ? 'block' : 'none';
-    portParams.style.display = (type === 'tcp' || type === 'udp' || type === 'tls') ? 'block' : 'none';
+    portParams.style.display = needsPort ? 'block' : 'none';
     tcpParams.style.display = type === 'tcp' ? 'block' : 'none';
     udpParams.style.display = type === 'udp' ? 'block' : 'none';
+    if (portInput) portInput.required = needsPort;
 }
 
 function updateEditCheckForm() {
@@ -303,11 +422,14 @@ function updateEditCheckForm() {
     const portParams = document.getElementById('editPortParams');
     const tcpParams = document.getElementById('editTcpParams');
     const udpParams = document.getElementById('editUdpParams');
-    
+    const portInput = document.getElementById('editCheckPort');
+
+    const needsPort = type === 'tcp' || type === 'udp' || type === 'tls';
     httpParams.style.display = type === 'http' ? 'block' : 'none';
-    portParams.style.display = (type === 'tcp' || type === 'udp' || type === 'tls') ? 'block' : 'none';
+    portParams.style.display = needsPort ? 'block' : 'none';
     tcpParams.style.display = type === 'tcp' ? 'block' : 'none';
     udpParams.style.display = type === 'udp' ? 'block' : 'none';
+    if (portInput) portInput.required = needsPort;
 }
 
 function convertIntervalToSeconds(intervalType, intervalValue) {
@@ -558,11 +680,13 @@ async function deleteCheck(id) {
             checkCharts.delete(id);
         }
         
+        // Инвалидируем кэш
+        domainChecksCache.clear();
+
         const checkEl = document.getElementById(`check-${id}`);
         if (checkEl) {
             checkEl.remove();
         } else {
-            // Если элемент не найден, перезагружаем домены
             await loadDomains();
         }
     } catch (error) {
@@ -575,9 +699,34 @@ async function toggleCheck(id, enabled) {
     try {
         const endpoint = enabled ? `/checks/${id}/enable` : `/checks/${id}/disable`;
         await apiCall(endpoint, { method: 'POST' });
-        
-        // Перезагружаем все домены для обновления статусов
-        await loadDomains();
+
+        // Обновляем статус в DOM без перезагрузки всей страницы
+        const el = document.getElementById(`check-${id}`);
+        if (el) {
+            const statusEl = el.querySelector('.check-status');
+            if (statusEl) {
+                statusEl.className = `check-status ${enabled ? 'enabled' : 'disabled'}`;
+                statusEl.textContent = enabled ? 'Включена' : 'Отключена';
+            }
+            // Обновляем кнопку включения/отключения
+            const actionsEl = el.querySelector('.check-actions');
+            if (actionsEl) {
+                const toggleBtn = actionsEl.querySelector('button:nth-child(3)');
+                if (toggleBtn) {
+                    if (enabled) {
+                        toggleBtn.className = 'btn btn-outline-secondary btn-sm';
+                        toggleBtn.textContent = 'Отключить';
+                        toggleBtn.setAttribute('onclick', `toggleCheck(${id}, false)`);
+                    } else {
+                        toggleBtn.className = 'btn btn-success btn-sm';
+                        toggleBtn.textContent = 'Включить';
+                        toggleBtn.setAttribute('onclick', `toggleCheck(${id}, true)`);
+                    }
+                }
+            }
+        }
+        // Инвалидируем кэш проверок для домена
+        domainChecksCache.clear();
     } catch (error) {
         showError(`Ошибка: ${error.message}`);
     }
@@ -797,50 +946,50 @@ async function loadCheckChartForCheck(checkId) {
                 {
                     label: '2xx (Успешные)',
                     data: status2xxData,
-                    borderColor: 'rgb(39, 174, 96)',
-                    backgroundColor: 'rgba(39, 174, 96, 0.1)',
-                    pointBackgroundColor: 'rgb(39, 174, 96)',
-                    pointBorderColor: 'rgb(39, 174, 96)',
+                    borderColor: 'rgb(25, 135, 84)',
+                    backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                    pointBackgroundColor: 'rgb(25, 135, 84)',
+                    pointBorderColor: 'rgb(25, 135, 84)',
                     tension: 0.1,
                     yAxisID: 'y'
                 },
                 {
                     label: '4xx (Ошибки клиента)',
                     data: status4xxData,
-                    borderColor: 'rgb(241, 196, 15)',
-                    backgroundColor: 'rgba(241, 196, 15, 0.1)',
-                    pointBackgroundColor: 'rgb(241, 196, 15)',
-                    pointBorderColor: 'rgb(241, 196, 15)',
+                    borderColor: 'rgb(255, 193, 7)',
+                    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                    pointBackgroundColor: 'rgb(255, 193, 7)',
+                    pointBorderColor: 'rgb(255, 193, 7)',
                     tension: 0.1,
                     yAxisID: 'y'
                 },
                 {
                     label: '5xx (Ошибки сервера)',
                     data: status5xxData,
-                    borderColor: 'rgb(231, 76, 60)',
-                    backgroundColor: 'rgba(231, 76, 60, 0.1)',
-                    pointBackgroundColor: 'rgb(231, 76, 60)',
-                    pointBorderColor: 'rgb(231, 76, 60)',
+                    borderColor: 'rgb(220, 53, 69)',
+                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    pointBackgroundColor: 'rgb(220, 53, 69)',
+                    pointBorderColor: 'rgb(220, 53, 69)',
                     tension: 0.1,
                     yAxisID: 'y'
                 },
                 {
                     label: 'Таймаут',
                     data: timeoutData,
-                    borderColor: 'rgb(149, 165, 166)',
-                    backgroundColor: 'rgba(149, 165, 166, 0.1)',
-                    pointBackgroundColor: 'rgb(149, 165, 166)',
-                    pointBorderColor: 'rgb(149, 165, 166)',
+                    borderColor: 'rgb(108, 117, 125)',
+                    backgroundColor: 'rgba(108, 117, 125, 0.1)',
+                    pointBackgroundColor: 'rgb(108, 117, 125)',
+                    pointBorderColor: 'rgb(108, 117, 125)',
                     tension: 0.1,
                     yAxisID: 'y'
                 },
                 {
                     label: 'Задержка (мс)',
                     data: latencyData,
-                    borderColor: 'rgb(102, 126, 234)',
-                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                    pointBackgroundColor: 'rgb(102, 126, 234)',
-                    pointBorderColor: 'rgb(102, 126, 234)',
+                    borderColor: 'rgb(13, 110, 253)',
+                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                    pointBackgroundColor: 'rgb(13, 110, 253)',
+                    pointBorderColor: 'rgb(13, 110, 253)',
                     tension: 0.1,
                     yAxisID: 'y1'
                 }
@@ -855,24 +1004,24 @@ async function loadCheckChartForCheck(checkId) {
                 {
                     label: 'Успешные',
                     data: successData,
-                    borderColor: 'rgb(39, 174, 96)',
-                    backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                    borderColor: 'rgb(25, 135, 84)',
+                    backgroundColor: 'rgba(25, 135, 84, 0.1)',
                     tension: 0.1,
                     yAxisID: 'y'
                 },
                 {
                     label: 'Неудачные',
                     data: failureData,
-                    borderColor: 'rgb(231, 76, 60)',
-                    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                    borderColor: 'rgb(220, 53, 69)',
+                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
                     tension: 0.1,
                     yAxisID: 'y'
                 },
                 {
                     label: 'Задержка (мс)',
                     data: latencyData,
-                    borderColor: 'rgb(102, 126, 234)',
-                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    borderColor: 'rgb(13, 110, 253)',
+                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
                     tension: 0.1,
                     yAxisID: 'y1'
                 }
@@ -959,6 +1108,7 @@ async function loadCheckChartForCheck(checkId) {
                         },
                         grid: {
                             drawOnChartArea: false,
+                            color: '#dee2e6',
                         },
                         ticks: {
                             font: {
@@ -1002,7 +1152,7 @@ async function loadCheckChartForCheck(checkId) {
         const canvasId = `checkChart-${checkId}`;
         const ctx = document.getElementById(canvasId);
         if (ctx && ctx.parentElement) {
-            ctx.parentElement.innerHTML = '<p style="color: #e74c3c; text-align: center; padding: 10px; font-size: 0.9em;">Ошибка загрузки данных: ' + error.message + '</p>';
+            ctx.parentElement.innerHTML = '<p style="color: #dc3545; text-align: center; padding: 10px; font-size: 0.9em;">Ошибка загрузки данных: ' + error.message + '</p>';
         }
     }
 }
@@ -1076,24 +1226,24 @@ async function loadCheckChart(checkId, interval = '1m') {
                     {
                         label: 'Успешные проверки',
                         data: successData,
-                        borderColor: 'rgb(39, 174, 96)',
-                        backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                        borderColor: 'rgb(25, 135, 84)',
+                        backgroundColor: 'rgba(25, 135, 84, 0.1)',
                         tension: 0.1,
                         yAxisID: 'y'
                     },
                     {
                         label: 'Неудачные проверки',
                         data: failureData,
-                        borderColor: 'rgb(231, 76, 60)',
-                        backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                        borderColor: 'rgb(220, 53, 69)',
+                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
                         tension: 0.1,
                         yAxisID: 'y'
                     },
                     {
                         label: 'Средняя задержка (мс)',
                         data: latencyData,
-                        borderColor: 'rgb(102, 126, 234)',
-                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderColor: 'rgb(13, 110, 253)',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
                         tension: 0.1,
                         yAxisID: 'y1'
                     }
@@ -1150,6 +1300,7 @@ async function loadCheckChart(checkId, interval = '1m') {
                         },
                         grid: {
                             drawOnChartArea: false,
+                            color: '#dee2e6',
                         },
                     }
                 }
@@ -1317,187 +1468,94 @@ let selectedPeriod = null; // Выбранный период для синхр�
 const domainCharts = new Map(); // Хранилище графиков для каждого домена
 const checkCharts = new Map(); // Хранилище графиков для каждой проверки (используется только в модальном окне)
 
-// Загрузка графика для домена (объединяет все проверки домена)
-async function loadDomainChart(domainId) {
-    try {
-        // Вычисляем период: последние 10 минут, исключая текущую минуту
-        const to = new Date();
-        to.setSeconds(0, 0);
-        const from = new Date(to.getTime() - 10 * 60 * 1000);
-        
-        const fromStr = from.toISOString();
-        const toStr = to.toISOString();
-        
-        // Загружаем все проверки домена
-        const checks = await apiCall(`/domains/${domainId}/checks`);
-        if (!checks || !Array.isArray(checks) || checks.length === 0) {
-            return;
-        }
-        
-        // Загружаем результаты всех проверок домена
-        const allResults = [];
-        for (const check of checks) {
-            try {
-                const response = await apiCall(`/checks/${check.id}/results?from=${encodeURIComponent(fromStr)}&to=${encodeURIComponent(toStr)}&page=1&page_size=100`);
-                if (response && response.results && Array.isArray(response.results)) {
-                    allResults.push(...response.results);
-                }
-            } catch (error) {
-                console.error(`Error loading results for check ${check.id}:`, error);
-            }
-        }
-        
-        const ctx = document.getElementById(`domainChart-${domainId}`);
-        if (!ctx) {
-            console.error('Domain chart canvas not found for domain', domainId);
-            return;
-        }
-        
-        // Агрегируем результаты по минутам
-        const aggregatedData = aggregateResultsByMinute(allResults, false);
-        
-        // Создаем метки и данные для графика
-        const labels = aggregatedData.map(item => {
-            const date = new Date(item.timestamp.replace(' ', 'T') + 'Z');
-            return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-        });
-        
-        const successData = aggregatedData.map(item => item.success_count || 0);
-        const failureData = aggregatedData.map(item => item.failure_count || 0);
-        const latencyData = aggregatedData.map(item => item.avg_latency || 0);
-        
-        if (domainCharts.has(domainId)) {
-            // Обновляем существующий график без пересоздания
-            const chart = domainCharts.get(domainId);
-            // Проверяем, что график еще существует и не уничтожен
-            if (chart && chart.canvas && chart.canvas.parentNode) {
-                chart.data.labels = labels;
-                chart.data.datasets[0].data = successData;
-                chart.data.datasets[1].data = failureData;
-                chart.data.datasets[2].data = latencyData;
-                chart.update('none'); // 'none' - без анимации для плавного обновления
-                return; // Выходим, не создавая новый график
-            } else {
-                // Если график был уничтожен, удаляем его из Map
-                domainCharts.delete(domainId);
-            }
-        }
-        
-        if (!domainCharts.has(domainId)) {
-            // Создаем новый график
-            const chart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: 'Успешные',
-                            data: successData,
-                            borderColor: 'rgb(39, 174, 96)',
-                            backgroundColor: 'rgba(39, 174, 96, 0.1)',
-                            tension: 0.1,
-                            yAxisID: 'y'
-                        },
-                        {
-                            label: 'Неудачные',
-                            data: failureData,
-                            borderColor: 'rgb(231, 76, 60)',
-                            backgroundColor: 'rgba(231, 76, 60, 0.1)',
-                            tension: 0.1,
-                            yAxisID: 'y'
-                        },
-                        {
-                            label: 'Задержка (мс)',
-                            data: latencyData,
-                            borderColor: 'rgb(102, 126, 234)',
-                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                            tension: 0.1,
-                            yAxisID: 'y1'
-                        }
-                    ]
+// Создание нового экземпляра графика домена
+function createDomainChartInstance(ctx, domainId, labels, successData, failureData, latencyData) {
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Успешные',
+                    data: successData,
+                    borderColor: 'rgb(25, 135, 84)',
+                    backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                    tension: 0.3,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHitRadius: 8,
+                    yAxisID: 'y'
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false,
-                    },
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'top',
-                            labels: {
-                                boxWidth: 12,
-                                font: {
-                                    size: 10
-                                }
-                            }
-                        },
-                        tooltip: {
-                            enabled: true
-                        }
-                    },
-                    scales: {
-                        y: {
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
-                            beginAtZero: true,
-                            min: 0,
-                            title: {
-                                display: true,
-                                text: 'Количество',
-                                font: {
-                                    size: 10
-                                }
-                            },
-                            ticks: {
-                                font: {
-                                    size: 9
-                                },
-                                stepSize: 1
-                            }
-                        },
-                        y1: {
-                            type: 'linear',
-                            display: true,
-                            position: 'right',
-                            beginAtZero: true,
-                            min: 0,
-                            title: {
-                                display: true,
-                                text: 'Задержка (мс)',
-                                font: {
-                                    size: 10
-                                }
-                            },
-                            grid: {
-                                drawOnChartArea: false,
-                            },
-                            ticks: {
-                                font: {
-                                    size: 9
-                                },
-                                stepSize: 10
-                            }
-                        },
-                        x: {
-                            ticks: {
-                                font: {
-                                    size: 9
-                                }
-                            }
-                        }
-                    }
+                {
+                    label: 'Неудачные',
+                    data: failureData,
+                    borderColor: 'rgb(220, 53, 69)',
+                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    tension: 0.3,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHitRadius: 8,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Задержка (мс)',
+                    data: latencyData,
+                    borderColor: 'rgb(13, 110, 253)',
+                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                    tension: 0.3,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHitRadius: 8,
+                    yAxisID: 'y1'
                 }
-            });
-            
-            domainCharts.set(domainId, chart);
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: { boxWidth: 12, font: { size: 10 } }
+                },
+                tooltip: { enabled: true }
+            },
+            scales: {
+                y: {
+                    type: 'linear', display: true, position: 'left',
+                    beginAtZero: true, min: 0,
+                    title: { display: true, text: 'Количество', font: { size: 10 } },
+                    ticks: { font: { size: 9 }, stepSize: 1 },
+                    grid: { color: '#dee2e6' }
+                },
+                y1: {
+                    type: 'linear', display: true, position: 'right',
+                    beginAtZero: true, min: 0,
+                    title: { display: true, text: 'Задержка (мс)', font: { size: 10 } },
+                    grid: { drawOnChartArea: false, color: '#dee2e6' },
+                    ticks: { font: { size: 9 }, stepSize: 10 }
+                },
+                x: {
+                    ticks: { font: { size: 9 } },
+                    grid: { color: '#dee2e6' }
+                }
+            }
         }
-    } catch (error) {
-        console.error('Error loading domain chart:', error);
-    }
+    });
+    domainCharts.set(domainId, chart);
+    return chart;
+}
+
+// Загрузка графика для одного домена (используется при первоначальной загрузке и из applyPeriodToDomainChart)
+async function loadDomainChart(domainId) {
+    const domains = [{ id: domainId }];
+    await updateAllDomainCharts(domains);
 }
 
 // Просмотр результатов домена (открывает модальное окно с графиком всех проверок)
@@ -1539,24 +1597,24 @@ async function applyPeriodToDomainChart(domainId, period) {
         const fromStr = from.toISOString();
         const toStr = to.toISOString();
         
-        // Загружаем все проверки домена
-        const checks = await apiCall(`/domains/${domainId}/checks`);
+        // Загружаем все проверки домена (из кэша или API)
+        let checks = domainChecksCache.get(domainId);
+        if (!checks) {
+            checks = await apiCall(`/domains/${domainId}/checks`);
+        }
         if (!checks || !Array.isArray(checks) || checks.length === 0) {
             return;
         }
-        
-        // Загружаем результаты всех проверок домена за новый период
-        const allResults = [];
-        for (const check of checks) {
-            try {
-                const response = await apiCall(`/checks/${check.id}/results?from=${encodeURIComponent(fromStr)}&to=${encodeURIComponent(toStr)}&page=1&page_size=1000`);
-                if (response && response.results && Array.isArray(response.results)) {
-                    allResults.push(...response.results);
-                }
-            } catch (error) {
-                console.error(`Error loading results for check ${check.id}:`, error);
-            }
-        }
+
+        // Загружаем результаты всех проверок параллельно
+        const resultsArrays = await Promise.all(
+            checks.map(check =>
+                apiCall(`/checks/${check.id}/results?from=${encodeURIComponent(fromStr)}&to=${encodeURIComponent(toStr)}&page=1&page_size=1000`)
+                    .then(r => (r && r.results && Array.isArray(r.results)) ? r.results : [])
+                    .catch(() => [])
+            )
+        );
+        const allResults = resultsArrays.flat();
         
         const ctx = document.getElementById(`domainChart-${domainId}`);
         if (!ctx) {
@@ -1595,25 +1653,31 @@ async function applyPeriodToDomainChart(domainId, period) {
     }
 }
 
+// Предотвращение параллельных обновлений
+let isRefreshing = false;
+
+async function refreshCharts() {
+    if (isRefreshing) return;
+    isRefreshing = true;
+    try {
+        const domains = await apiCall('/domains');
+        if (domains && Array.isArray(domains)) {
+            // Фильтруем только существующие в DOM домены
+            const visibleDomains = domains.filter(d => document.getElementById(`domain-${d.id}`));
+            if (visibleDomains.length > 0) {
+                await updateAllDomainCharts(visibleDomains);
+            }
+        }
+    } catch (error) {
+        console.error('Error updating charts:', error);
+    } finally {
+        isRefreshing = false;
+    }
+}
+
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
     loadDomains();
-    // Автообновление каждые 30 секунд
-    setInterval(async () => {
-        // Обновляем только графики, не пересоздавая DOM элементы
-        try {
-            const domains = await apiCall('/domains');
-            if (domains && Array.isArray(domains)) {
-                for (const domain of domains) {
-                    // Обновляем график только если элемент домена существует
-                    const domainEl = document.getElementById(`domain-${domain.id}`);
-                    if (domainEl) {
-                        await loadDomainChart(domain.id);
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Error updating charts:', error);
-        }
-    }, 30000);
+    // Обновление графиков каждые 10 секунд
+    setInterval(refreshCharts, 10000);
 });
