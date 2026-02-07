@@ -72,3 +72,5 @@ coverage.out
 # ─── Debug files ─────────────────────────────────────
 debug
 __debug_bin
+.claude/settings.local.json
+CLAUDE.md

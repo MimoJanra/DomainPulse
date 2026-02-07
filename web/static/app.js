@@ -4,16 +4,20 @@ const API_BASE = '';
 function showToast(message, type) {
     const container = document.getElementById('toastContainer');
     if (!container) return;
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    const icon = type === 'error' ? '&#10005;' : '&#10003;';
-    toast.innerHTML = `<span class="toast-icon">${icon}</span><span>${escapeHtml(message)}</span>`;
-    container.appendChild(toast);
-    const duration = type === 'error' ? 5000 : 3000;
-    setTimeout(() => {
-        toast.classList.add('toast-out');
-        toast.addEventListener('animationend', () => toast.remove());
-    }, duration);
+    const bg = type === 'error' ? 'bg-danger' : 'bg-success';
+    const toastEl = document.createElement('div');
+    toastEl.className = `toast`;
+    toastEl.setAttribute('role', 'alert');
+    toastEl.innerHTML = `
+        <div class="toast-header text-white ${bg} border-0">
+            <strong class="me-auto">${type === 'error' ? 'Ошибка' : 'Успех'}</strong>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Закрыть"></button>
+        </div>
+        <div class="toast-body">${escapeHtml(message)}</div>`;
+    container.appendChild(toastEl);
+    const toast = new bootstrap.Toast(toastEl, { delay: type === 'error' ? 5000 : 3000 });
+    toast.show();
+    toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
 }
 
 function showError(message) {
@@ -82,8 +86,8 @@ async function loadDomains() {
         const domains = await apiCall('/domains');
 
         if (!domains || !Array.isArray(domains)) {
-            if (listEl.innerHTML.includes('loading') || listEl.innerHTML.includes('Загрузка')) {
-                listEl.innerHTML = '<div class="error">Ошибка: неверный формат ответа от сервера</div>';
+            if (listEl.innerHTML.includes('Загрузка') || listEl.querySelector('.spinner-border')) {
+                listEl.innerHTML = '<div class="alert alert-danger">Ошибка: неверный формат ответа от сервера</div>';
             }
             return;
         }
@@ -94,13 +98,12 @@ async function loadDomains() {
             checkCharts.forEach((chart) => chart.destroy());
             checkCharts.clear();
             domainChecksCache.clear();
-            listEl.innerHTML = '<div class="empty-state">Нет доменов для мониторинга</div>';
+            listEl.innerHTML = '<p class="text-center text-muted py-4 mb-0">Нет доменов для мониторинга</p>';
             return;
         }
 
-        // Убираем сообщение "Загрузка" / empty-state если оно есть
-        const loadingEl = listEl.querySelector('.loading, .empty-state');
-        if (loadingEl) listEl.innerHTML = '';
+        const loadingEl = listEl.querySelector('.spinner-border, .text-muted');
+        if (loadingEl && loadingEl.textContent.includes('Загрузка')) listEl.innerHTML = '';
 
         const existingDomainIds = new Set(domains.map(d => d.id));
 
@@ -111,7 +114,7 @@ async function loadDomains() {
                 domainCharts.delete(domainId);
             }
         });
-        listEl.querySelectorAll('.domain-item').forEach(el => {
+        listEl.querySelectorAll('[id^="domain-"]').forEach(el => {
             const domainId = parseInt(el.id.replace('domain-', ''));
             if (!existingDomainIds.has(domainId)) {
                 domainChecksCache.delete(domainId);
@@ -133,8 +136,8 @@ async function loadDomains() {
         await updateAllDomainCharts(domains);
 
     } catch (error) {
-        if (listEl.innerHTML.includes('loading') || listEl.innerHTML.includes('Загрузка')) {
-            listEl.innerHTML = `<div class="error">Ошибка загрузки: ${error.message}</div>`;
+        if (listEl.innerHTML.includes('Загрузка') || listEl.querySelector('.spinner-border')) {
+            listEl.innerHTML = `<div class="alert alert-danger">Ошибка загрузки: ${escapeHtml(error.message)}</div>`;
         }
     }
 }
@@ -203,21 +206,23 @@ async function updateAllDomainCharts(domains) {
 
 function createDomainElement(domain) {
     const div = document.createElement('div');
-    div.className = 'domain-item';
+    div.className = 'card';
     div.id = `domain-${domain.id}`;
     div.innerHTML = `
-        <div class="domain-header">
-            <span class="domain-name">${escapeHtml(domain.name)}</span>
-            <div class="domain-actions">
-                <button class="btn btn-primary btn-sm" onclick="openCheckModal(${domain.id})">+ Проверка</button>
-                <button class="btn btn-danger btn-sm" onclick="deleteDomain(${domain.id})">Удалить</button>
+        <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <h5 class="card-title mb-0">${escapeHtml(domain.name)}</h5>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-primary" onclick="openCheckModal(${domain.id})">+ Проверка</button>
+                    <button class="btn btn-danger" onclick="deleteDomain(${domain.id})">Удалить</button>
+                </div>
             </div>
-        </div>
-        <div class="domain-chart-container" style="margin-top: 12px; width: 100%; position: relative; height: 200px; cursor: pointer;" onclick="viewDomainResults(${domain.id})">
-            <canvas id="domainChart-${domain.id}"></canvas>
-        </div>
-        <div class="checks-list" id="checks-${domain.id}">
-            <p class="loading">Загрузка проверок...</p>
+            <div class="position-relative w-100 mb-3" style="height: 200px; cursor: pointer;" onclick="viewDomainResults(${domain.id})">
+                <canvas id="domainChart-${domain.id}"></canvas>
+            </div>
+            <div id="checks-${domain.id}">
+                <p class="text-center text-muted py-3 mb-0"><span class="spinner-border spinner-border-sm me-2" role="status"></span>Загрузка проверок...</p>
+            </div>
         </div>
     `;
     return div;
@@ -231,24 +236,21 @@ async function loadChecksForDomain(domainId) {
         const checks = await apiCall(`/domains/${domainId}/checks`);
 
         if (!checks || !Array.isArray(checks)) {
-            checksEl.innerHTML = '<div class="error">Ошибка: неверный формат ответа от сервера</div>';
+            checksEl.innerHTML = '<div class="alert alert-danger">Ошибка: неверный формат ответа от сервера</div>';
             return;
         }
 
-        // Обновляем кэш проверок
         domainChecksCache.set(domainId, checks);
 
         if (checks.length === 0) {
-            checksEl.innerHTML = '<p style="color: var(--bs-secondary-color); text-align: center; padding: 10px;">Нет проверок</p>';
+            checksEl.innerHTML = '<p class="text-center text-muted py-2 mb-0">Нет проверок</p>';
             return;
         }
 
-        // Diff-обновление: обновляем существующие, добавляем новые, удаляем лишние
         const newCheckIds = new Set(checks.map(c => c.id));
         const existingCheckIds = new Set();
 
-        // Удаляем элементы проверок, которых больше нет
-        checksEl.querySelectorAll('.check-item').forEach(el => {
+        checksEl.querySelectorAll('[id^="check-"]').forEach(el => {
             const checkId = parseInt(el.id.replace('check-', ''));
             if (!newCheckIds.has(checkId)) {
                 if (checkCharts.has(checkId)) {
@@ -261,11 +263,7 @@ async function loadChecksForDomain(domainId) {
             }
         });
 
-        // Убираем placeholder текст если он есть
-        const placeholder = checksEl.querySelector('.loading, p');
-        if (placeholder && !placeholder.classList.contains('check-item')) {
-            placeholder.remove();
-        }
+        checksEl.querySelectorAll(':scope > p, :scope > .alert').forEach(el => el.remove());
 
         // Добавляем/обновляем элементы проверок
         for (const check of checks) {
@@ -286,15 +284,13 @@ async function loadChecksForDomain(domainId) {
 
 // Обновление содержимого check-item без пересоздания DOM
 function updateCheckElement(el, check) {
-    const statusEl = el.querySelector('.check-status');
+    const statusEl = el.querySelector('.badge[data-status]');
     if (statusEl) {
-        const statusClass = check.enabled ? 'enabled' : 'disabled';
-        const statusText = check.enabled ? 'Включена' : 'Отключена';
-        statusEl.className = `check-status ${statusClass}`;
-        statusEl.textContent = statusText;
+        statusEl.className = `badge ${check.enabled ? 'bg-success' : 'bg-secondary'}`;
+        statusEl.textContent = check.enabled ? 'Включена' : 'Отключена';
     }
 
-    const detailsEl = el.querySelector('.check-details');
+    const detailsEl = el.querySelector('.small.text-muted');
     if (detailsEl) {
         let details = `Интервал: ${check.interval_seconds || 0}с`;
         if (check.params) {
@@ -308,37 +304,38 @@ function updateCheckElement(el, check) {
 
 function createCheckElement(check) {
     const div = document.createElement('div');
-    div.className = 'check-item';
+    div.className = 'card mb-2';
     div.id = `check-${check.id}`;
     div.setAttribute('data-check-type', (check.type || 'unknown').toLowerCase());
-    
-    const statusClass = check.enabled ? 'enabled' : 'disabled';
-    const statusText = check.enabled ? 'Включена' : 'Отключена';
-    
+
     let details = `Интервал: ${check.interval_seconds || 0}с`;
     if (check.params) {
         if (check.params.path) details += ` | Путь: ${check.params.path}`;
         if (check.params.port) details += ` | Порт: ${check.params.port}`;
     }
     if (check.realtime_mode) details += ` | Реальное время`;
-    
+
     const checkType = (check.type || 'unknown').toLowerCase();
-    
+    const typeBadge = { http: 'bg-info', icmp: 'bg-primary', tcp: 'bg-warning text-dark', udp: 'bg-success', tls: 'bg-danger' }[checkType] || 'bg-secondary';
+    const statusBadge = check.enabled ? 'bg-success' : 'bg-secondary';
+
     div.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div class="check-info">
-                <span class="check-type ${checkType}">${checkType.toUpperCase()}</span>
-                <span class="check-status ${statusClass}">${statusText}</span>
-                <div class="check-details">${details}</div>
-            </div>
-            <div class="check-actions">
-                <button class="btn btn-primary btn-sm" onclick="viewCheckResults(${check.id})">Результаты</button>
-                <button class="btn btn-outline-dark btn-sm" onclick="editCheck(${check.id})" title="Редактировать">⚙️</button>
-                ${check.enabled
-                    ? `<button class="btn btn-outline-dark btn-sm" onclick="toggleCheck(${check.id}, false)">Отключить</button>`
-                    : `<button class="btn btn-success btn-sm" onclick="toggleCheck(${check.id}, true)">Включить</button>`
-                }
-                <button class="btn btn-danger btn-sm" onclick="deleteCheck(${check.id})">Удалить</button>
+        <div class="card-body py-2">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                <div>
+                    <span class="badge ${typeBadge} me-1">${checkType.toUpperCase()}</span>
+                    <span class="badge ${statusBadge}" data-status>${check.enabled ? 'Включена' : 'Отключена'}</span>
+                    <div class="small text-muted mt-1">${details}</div>
+                </div>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-primary" onclick="viewCheckResults(${check.id})">Результаты</button>
+                    <button class="btn btn-outline-dark" onclick="editCheck(${check.id})" title="Редактировать">⚙️</button>
+                    ${check.enabled
+                        ? `<button class="btn btn-outline-dark" onclick="toggleCheck(${check.id}, false)">Отключить</button>`
+                        : `<button class="btn btn-success" onclick="toggleCheck(${check.id}, true)">Включить</button>`
+                    }
+                    <button class="btn btn-danger" onclick="deleteCheck(${check.id})">Удалить</button>
+                </div>
             </div>
         </div>
     `;
@@ -387,7 +384,8 @@ let checkTypeHandlerAdded = false;
 
 function openCheckModal(domainId) {
     document.getElementById('checkDomainId').value = domainId;
-    document.getElementById('checkModal').style.display = 'block';
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('checkModal'));
+    modal.show();
     
     // Показываем/скрываем поля в зависимости от типа проверки
     if (!checkTypeHandlerAdded) {
@@ -499,7 +497,8 @@ document.getElementById('addCheckForm').addEventListener('submit', async (e) => 
             })
         });
         
-        document.getElementById('checkModal').style.display = 'none';
+        const m = bootstrap.Modal.getInstance(document.getElementById('checkModal'));
+        if (m) m.hide();
         document.getElementById('addCheckForm').reset();
         showSuccess('Проверка создана');
         await loadChecksForDomain(domainId);
@@ -571,8 +570,7 @@ async function editCheck(checkId) {
         // Обновляем видимость полей
         updateEditCheckForm();
         
-        // Показываем модальное окно
-        document.getElementById('editCheckModal').style.display = 'block';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('editCheckModal')).show();
     } catch (error) {
         showError(`Ошибка загрузки проверки: ${error.message}`);
     }
@@ -638,7 +636,8 @@ document.getElementById('editCheckForm').addEventListener('submit', async (e) =>
             })
         });
         
-        document.getElementById('editCheckModal').style.display = 'none';
+        const em = bootstrap.Modal.getInstance(document.getElementById('editCheckModal'));
+        if (em) em.hide();
         showSuccess('Проверка обновлена');
         await loadChecksForDomain(domainId);
     } catch (error) {
@@ -655,7 +654,8 @@ document.getElementById('deleteCheckBtn').addEventListener('click', async () => 
     
     try {
         await apiCall(`/checks/${checkId}`, { method: 'DELETE' });
-        document.getElementById('editCheckModal').style.display = 'none';
+        const em = bootstrap.Modal.getInstance(document.getElementById('editCheckModal'));
+        if (em) em.hide();
         showSuccess('Проверка удалена');
         
         // Удаляем график из хранилища
@@ -704,28 +704,23 @@ async function toggleCheck(id, enabled) {
         const endpoint = enabled ? `/checks/${id}/enable` : `/checks/${id}/disable`;
         await apiCall(endpoint, { method: 'POST' });
 
-        // Обновляем статус в DOM без перезагрузки всей страницы
         const el = document.getElementById(`check-${id}`);
         if (el) {
-            const statusEl = el.querySelector('.check-status');
+            const statusEl = el.querySelector('.badge[data-status]');
             if (statusEl) {
-                statusEl.className = `check-status ${enabled ? 'enabled' : 'disabled'}`;
+                statusEl.className = `badge ${enabled ? 'bg-success' : 'bg-secondary'}`;
                 statusEl.textContent = enabled ? 'Включена' : 'Отключена';
             }
-            // Обновляем кнопку включения/отключения
-            const actionsEl = el.querySelector('.check-actions');
-            if (actionsEl) {
-                const toggleBtn = actionsEl.querySelector('button:nth-child(3)');
-                if (toggleBtn) {
-                    if (enabled) {
-                        toggleBtn.className = 'btn btn-outline-dark btn-sm';
-                        toggleBtn.textContent = 'Отключить';
-                        toggleBtn.setAttribute('onclick', `toggleCheck(${id}, false)`);
-                    } else {
-                        toggleBtn.className = 'btn btn-success btn-sm';
-                        toggleBtn.textContent = 'Включить';
-                        toggleBtn.setAttribute('onclick', `toggleCheck(${id}, true)`);
-                    }
+            const toggleBtn = el.querySelector('.btn-group button:nth-child(3)');
+            if (toggleBtn) {
+                if (enabled) {
+                    toggleBtn.className = 'btn btn-outline-dark';
+                    toggleBtn.textContent = 'Отключить';
+                    toggleBtn.setAttribute('onclick', `toggleCheck(${id}, false)`);
+                } else {
+                    toggleBtn.className = 'btn btn-success';
+                    toggleBtn.textContent = 'Включить';
+                    toggleBtn.setAttribute('onclick', `toggleCheck(${id}, true)`);
                 }
             }
         }
@@ -1156,7 +1151,7 @@ async function loadCheckChartForCheck(checkId) {
         const canvasId = `checkChart-${checkId}`;
         const ctx = document.getElementById(canvasId);
         if (ctx && ctx.parentElement) {
-            ctx.parentElement.innerHTML = '<p style="color: var(--bs-danger); text-align: center; padding: 10px; font-size: 0.9em;">Ошибка загрузки данных: ' + error.message + '</p>';
+            ctx.parentElement.innerHTML = '<div class="alert alert-danger py-2 mb-0 text-center small">Ошибка загрузки данных: ' + escapeHtml(error.message) + '</div>';
         }
     }
 }
@@ -1317,21 +1312,21 @@ async function loadCheckChart(checkId, interval = '1m') {
 
 // Просмотр результатов проверки
 async function viewCheckResults(checkId) {
-    const modal = document.getElementById('resultsModal');
+    const modalEl = document.getElementById('resultsModal');
     const statsEl = document.getElementById('checkStats');
     const resultsEl = document.getElementById('resultsList');
-    
+
     currentCheckId = checkId;
-    modal.style.display = 'block';
-    statsEl.innerHTML = '<p class="loading">Загрузка статистики...</p>';
-    resultsEl.innerHTML = '<p class="loading">Загрузка результатов...</p>';
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    statsEl.innerHTML = '<div class="col-12"><p class="text-center text-muted mb-0"><span class="spinner-border spinner-border-sm me-2" role="status"></span>Загрузка статистики...</p></div>';
+    resultsEl.innerHTML = '<div class="list-group-item text-center text-muted">Загрузка результатов...</div>';
     
     try {
         // Загружаем статистику
         const stats = await apiCall(`/checks/${checkId}/stats`);
         
         if (!stats || !stats.latency_stats || !stats.status_distribution) {
-            statsEl.innerHTML = '<div class="error">Ошибка: неверный формат статистики</div>';
+            statsEl.innerHTML = '<div class="col-12"><div class="alert alert-danger">Ошибка: неверный формат статистики</div></div>';
         } else {
             const total = stats.total_results || 0;
             const avg = stats.latency_stats.avg || 0;
@@ -1341,22 +1336,10 @@ async function viewCheckResults(checkId) {
             const successRate = statusTotal > 0 ? ((successCount / statusTotal) * 100).toFixed(1) : 0;
             
             statsEl.innerHTML = `
-                <div class="stat-card">
-                    <div class="stat-value">${total}</div>
-                    <div class="stat-label">Всего проверок</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${avg.toFixed(0)}</div>
-                    <div class="stat-label">Средняя задержка (мс)</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${p95.toFixed(0)}</div>
-                    <div class="stat-label">P95 задержка (мс)</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${successRate}%</div>
-                    <div class="stat-label">Успешность</div>
-                </div>
+                <div class="col"><div class="card text-center"><div class="card-body py-3"><div class="h4 mb-1">${total}</div><div class="small text-muted">Всего проверок</div></div></div></div>
+                <div class="col"><div class="card text-center"><div class="card-body py-3"><div class="h4 mb-1">${avg.toFixed(0)}</div><div class="small text-muted">Средняя задержка (мс)</div></div></div></div>
+                <div class="col"><div class="card text-center"><div class="card-body py-3"><div class="h4 mb-1">${p95.toFixed(0)}</div><div class="small text-muted">P95 задержка (мс)</div></div></div></div>
+                <div class="col"><div class="card text-center"><div class="card-body py-3"><div class="h4 mb-1">${successRate}%</div><div class="small text-muted">Успешность</div></div></div></div>
             `;
         }
         
@@ -1405,57 +1388,43 @@ async function viewCheckResults(checkId) {
         const response = await apiCall(`/checks/${checkId}/results?page=1&page_size=50`);
         
         if (!response || !response.results || !Array.isArray(response.results)) {
-            resultsEl.innerHTML = '<div class="error">Ошибка: неверный формат результатов</div>';
+            resultsEl.innerHTML = '<div class="list-group-item"><div class="alert alert-danger mb-0">Ошибка: неверный формат результатов</div></div>';
             return;
         }
-        
+
         if (response.results.length === 0) {
-            resultsEl.innerHTML = '<div class="empty-state">Нет результатов</div>';
+            resultsEl.innerHTML = '<div class="list-group-item text-center text-muted">Нет результатов</div>';
             return;
         }
-        
+
         resultsEl.innerHTML = '';
-        
+
         for (const result of response.results) {
+            const variant = result.status === 'success' ? 'list-group-item-success' : result.status === 'failure' ? 'list-group-item-danger' : '';
+            const statusText = result.status === 'success' ? '✅ Успех' : result.status === 'failure' ? '❌ Ошибка' : '⏱️ Таймаут';
             const resultEl = document.createElement('div');
-            resultEl.className = `result-item ${result.status || 'unknown'}`;
-            
-            const statusText = result.status === 'success' ? '✅ Успех' : 
-                             result.status === 'failure' ? '❌ Ошибка' : '⏱️ Таймаут';
-            
+            resultEl.className = `list-group-item ${variant}`;
             resultEl.innerHTML = `
-                <div class="result-header">
-                    <span class="result-status">${statusText}</span>
-                    <span class="result-time">${result.created_at ? new Date(result.created_at).toLocaleString('ru-RU') : 'N/A'}</span>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="fw-bold">${statusText}</span>
+                    <span class="small text-muted">${result.created_at ? new Date(result.created_at).toLocaleString('ru-RU') : 'N/A'}</span>
                 </div>
-                <div class="result-details">
+                <div class="small text-muted mt-1">
                     Задержка: ${result.duration_ms || 0}мс
                     ${result.status_code ? ` | Код: ${result.status_code}` : ''}
                     ${result.outcome ? ` | ${result.outcome}` : ''}
                     ${result.error_message ? ` | ${escapeHtml(result.error_message)}` : ''}
                 </div>
             `;
-            
             resultsEl.appendChild(resultEl);
         }
     } catch (error) {
-        statsEl.innerHTML = `<div class="error">Ошибка загрузки: ${error.message}</div>`;
+        statsEl.innerHTML = `<div class="col-12"><div class="alert alert-danger">Ошибка загрузки: ${escapeHtml(error.message)}</div></div>`;
         resultsEl.innerHTML = '';
     }
 }
 
-// Закрытие модальных окон
-document.querySelectorAll('.close').forEach(closeBtn => {
-    closeBtn.addEventListener('click', function() {
-        this.closest('.modal').style.display = 'none';
-    });
-});
-
-window.addEventListener('click', function(e) {
-    if (e.target.classList.contains('modal')) {
-        e.target.style.display = 'none';
-    }
-});
+// Bootstrap Modal закрывается через data-bs-dismiss
 
 // Утилита для экранирования HTML
 function escapeHtml(text) {
