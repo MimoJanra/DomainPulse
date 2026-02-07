@@ -87,7 +87,7 @@ async function loadDomains() {
 
         if (!domains || !Array.isArray(domains)) {
             if (listEl.innerHTML.includes('Загрузка') || listEl.querySelector('.spinner-border')) {
-                listEl.innerHTML = '<div class="alert alert-danger">Ошибка: неверный формат ответа от сервера</div>';
+                listEl.innerHTML = '<div class="alert alert-dismissible alert-danger" role="alert"><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button><h4 class="alert-heading">Ошибка!</h4><p class="mb-0">Неверный формат ответа от сервера</p></div>';
             }
             return;
         }
@@ -136,7 +136,7 @@ async function loadDomains() {
 
     } catch (error) {
         if (listEl.innerHTML.includes('Загрузка') || listEl.querySelector('.spinner-border')) {
-            listEl.innerHTML = `<div class="alert alert-danger">Ошибка загрузки: ${escapeHtml(error.message)}</div>`;
+            listEl.innerHTML = `<div class="alert alert-dismissible alert-danger" role="alert"><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button><h4 class="alert-heading">Ошибка!</h4><p class="mb-0">${escapeHtml(error.message)}</p></div>`;
         }
     }
 }
@@ -238,7 +238,7 @@ async function loadChecksForDomain(domainId) {
         const checks = await apiCall(`/domains/${domainId}/checks`);
 
         if (!checks || !Array.isArray(checks)) {
-            checksEl.innerHTML = '<li class="list-group-item"><div class="alert alert-danger py-2 mb-0">Ошибка: неверный формат ответа от сервера</div></li>';
+            checksEl.innerHTML = '<li class="list-group-item"><div class="alert alert-dismissible alert-danger py-2 mb-0" role="alert"><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button><h5 class="alert-heading">Ошибка!</h5><p class="mb-0">Неверный формат ответа от сервера</p></div></li>';
             return;
         }
 
@@ -279,7 +279,7 @@ async function loadChecksForDomain(domainId) {
             }
         }
     } catch (error) {
-        checksEl.innerHTML = `<li class="list-group-item"><div class="alert alert-danger py-2 mb-0">Ошибка загрузки проверок: ${escapeHtml(error.message)}</div></li>`;
+        checksEl.innerHTML = `<li class="list-group-item"><div class="alert alert-dismissible alert-danger py-2 mb-0" role="alert"><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button><h5 class="alert-heading">Ошибка!</h5><p class="mb-0">${escapeHtml(error.message)}</p></div></li>`;
         console.error(`Ошибка загрузки проверок для домена ${domainId}:`, error);
     }
 }
@@ -1156,7 +1156,7 @@ async function loadCheckChartForCheck(checkId) {
         const canvasId = `checkChart-${checkId}`;
         const ctx = document.getElementById(canvasId);
         if (ctx && ctx.parentElement) {
-            ctx.parentElement.innerHTML = '<div class="alert alert-danger py-2 mb-0 text-center small">Ошибка загрузки данных: ' + escapeHtml(error.message) + '</div>';
+            ctx.parentElement.innerHTML = '<div class="alert alert-dismissible alert-danger py-2 mb-0 text-center small" role="alert"><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button><h5 class="alert-heading">Ошибка!</h5><p class="mb-0">' + escapeHtml(error.message) + '</p></div>';
         }
     }
 }
@@ -1331,7 +1331,7 @@ async function viewCheckResults(checkId) {
         const stats = await apiCall(`/checks/${checkId}/stats`);
         
         if (!stats || !stats.latency_stats || !stats.status_distribution) {
-            statsEl.innerHTML = '<div class="col-12"><div class="alert alert-danger">Ошибка: неверный формат статистики</div></div>';
+            statsEl.innerHTML = '<div class="col-12"><div class="alert alert-dismissible alert-danger" role="alert"><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button><h5 class="alert-heading">Ошибка!</h5><p class="mb-0">Неверный формат статистики</p></div></div>';
         } else {
             const total = stats.total_results || 0;
             const avg = stats.latency_stats.avg || 0;
@@ -1393,7 +1393,7 @@ async function viewCheckResults(checkId) {
         const response = await apiCall(`/checks/${checkId}/results?page=1&page_size=50`);
         
         if (!response || !response.results || !Array.isArray(response.results)) {
-            resultsEl.innerHTML = '<div class="list-group-item"><div class="alert alert-danger mb-0">Ошибка: неверный формат результатов</div></div>';
+            resultsEl.innerHTML = '<div class="list-group-item"><div class="alert alert-dismissible alert-danger mb-0" role="alert"><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button><h5 class="alert-heading">Ошибка!</h5><p class="mb-0">Неверный формат результатов</p></div></div>';
             return;
         }
 
@@ -1424,7 +1424,7 @@ async function viewCheckResults(checkId) {
             resultsEl.appendChild(resultEl);
         }
     } catch (error) {
-        statsEl.innerHTML = `<div class="col-12"><div class="alert alert-danger">Ошибка загрузки: ${escapeHtml(error.message)}</div></div>`;
+        statsEl.innerHTML = `<div class="col-12"><div class="alert alert-dismissible alert-danger" role="alert"><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button><h5 class="alert-heading">Ошибка!</h5><p class="mb-0">${escapeHtml(error.message)}</p></div></div>`;
         resultsEl.innerHTML = '';
     }
 }
