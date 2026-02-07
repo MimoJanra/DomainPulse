@@ -1,4 +1,7 @@
 /* ===== App-specific overrides for Bootswatch Brite theme ===== */
+/* Brite palette: primary #a2e436, success #68d391, danger #f56565,
+   warning #ffc700, info #22d2ed, dark #000, body #fff,
+   card-border #000, border #dee2e6 */
 
 /* ===== Logo ===== */
 .logo-icon {
@@ -48,8 +51,8 @@
 
 .domain-item {
     background: #fff;
-    border: 2px solid #212529;
-    border-radius: 0;
+    border: 1px solid #000;
+    border-radius: var(--bs-border-radius);
     padding: 20px;
 }
 
@@ -63,7 +66,7 @@
 .domain-name {
     font-size: 1.15em;
     font-weight: 700;
-    color: #212529;
+    color: #000;
 }
 
 .domain-actions {
@@ -81,8 +84,8 @@
 
 .check-item {
     background: #f8f9fa;
-    border: 2px solid #212529;
-    border-radius: 0;
+    border: 1px solid #000;
+    border-radius: var(--bs-border-radius);
     padding: 14px 16px;
     display: flex;
     flex-direction: column;
@@ -102,38 +105,38 @@
 .check-type {
     display: inline-block;
     padding: 3px 10px;
-    border-radius: 0;
+    border-radius: var(--bs-border-radius);
     font-size: 0.75em;
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     margin-right: 8px;
-    border: 2px solid #212529;
+    border: 2px solid #000;
 }
 
 .check-type.http {
-    background: #cfe2ff;
-    color: #084298;
+    background: #d0ebff;
+    color: #1971c2;
 }
 
 .check-type.icmp {
-    background: #e2d9f3;
-    color: #59359a;
+    background: #e5dbff;
+    color: #7048e8;
 }
 
 .check-type.tcp {
-    background: #ffe5d0;
-    color: #984c0c;
+    background: #ffe8cc;
+    color: #e8590c;
 }
 
 .check-type.udp {
-    background: #d1e7dd;
-    color: #0f5132;
+    background: rgba(104, 211, 145, 0.2);
+    color: #0ca678;
 }
 
 .check-type.tls {
-    background: #f8d7da;
-    color: #842029;
+    background: rgba(245, 101, 101, 0.15);
+    color: #e03131;
 }
 
 .check-details {
@@ -148,15 +151,15 @@
     align-items: center;
     gap: 6px;
     padding: 3px 10px;
-    border-radius: 0;
+    border-radius: var(--bs-border-radius);
     font-size: 0.75em;
     font-weight: 700;
-    border: 2px solid #212529;
+    border: 2px solid #000;
 }
 
 .check-status.enabled {
-    background: #d1e7dd;
-    color: #0f5132;
+    background: rgba(104, 211, 145, 0.2);
+    color: #0ca678;
 }
 
 .check-status.enabled::before {
@@ -165,7 +168,7 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: #198754;
+    background: #68d391;
     animation: pulse-dot 2s ease-in-out infinite;
 }
 
@@ -208,7 +211,7 @@
     width: 16px;
     height: 16px;
     border: 2px solid #dee2e6;
-    border-top-color: var(--bs-primary);
+    border-top-color: #a2e436;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
     margin-right: 8px;
@@ -252,7 +255,7 @@
 .toast {
     pointer-events: auto;
     padding: 12px 18px;
-    border-radius: 0;
+    border-radius: var(--bs-border-radius);
     font-size: 0.87em;
     font-weight: 600;
     display: flex;
@@ -260,7 +263,7 @@
     gap: 10px;
     min-width: 280px;
     max-width: 420px;
-    border: 2px solid #212529;
+    border: 2px solid #000;
     animation: toastIn 250ms ease-out;
 }
 
@@ -269,13 +272,13 @@
 }
 
 .toast.error {
-    background: #f8d7da;
-    color: #842029;
+    background: rgba(245, 101, 101, 0.15);
+    color: #c92a2a;
 }
 
 .toast.success {
-    background: #d1e7dd;
-    color: #0f5132;
+    background: rgba(104, 211, 145, 0.2);
+    color: #0ca678;
 }
 
 .toast .toast-icon {
@@ -307,19 +310,21 @@
 
 /* Legacy inline error/success (fallback) */
 .error:not(.toast) {
-    background: #f8d7da;
-    color: #842029;
+    background: rgba(245, 101, 101, 0.15);
+    color: #c92a2a;
     padding: 10px 14px;
-    border: 2px solid #212529;
+    border: 2px solid #000;
+    border-radius: var(--bs-border-radius);
     margin: 10px 0;
     font-size: 0.9em;
 }
 
 .success:not(.toast) {
-    background: #d1e7dd;
-    color: #0f5132;
+    background: rgba(104, 211, 145, 0.2);
+    color: #0ca678;
     padding: 10px 14px;
-    border: 2px solid #212529;
+    border: 2px solid #000;
+    border-radius: var(--bs-border-radius);
     margin: 10px 0;
     font-size: 0.9em;
 }
@@ -334,7 +339,8 @@
 
 .stat-card {
     background: #fff;
-    border: 2px solid #212529;
+    border: 1px solid #000;
+    border-radius: var(--bs-border-radius);
     padding: 16px;
     text-align: center;
 }
@@ -342,7 +348,7 @@
 .stat-value {
     font-size: 1.75em;
     font-weight: 700;
-    color: var(--bs-primary);
+    color: #000;
     line-height: 1.2;
 }
 
@@ -363,21 +369,21 @@
 
 .result-item {
     background: #f8f9fa;
-    border-left: 4px solid #dee2e6;
     padding: 12px 14px;
     margin-bottom: 8px;
-    border: 2px solid #212529;
+    border: 1px solid #000;
     border-left-width: 4px;
+    border-radius: var(--bs-border-radius);
 }
 
 .result-item.success {
-    border-left-color: #198754;
-    background: #d1e7dd;
+    border-left-color: #68d391;
+    background: rgba(104, 211, 145, 0.1);
 }
 
 .result-item.failure {
-    border-left-color: #dc3545;
-    background: #f8d7da;
+    border-left-color: #f56565;
+    background: rgba(245, 101, 101, 0.1);
 }
 
 .result-item.timeout {
@@ -394,7 +400,7 @@
 .result-status {
     font-weight: 700;
     font-size: 0.9em;
-    color: #212529;
+    color: #000;
 }
 
 .result-time {
@@ -420,7 +426,8 @@
 .domain-chart-container {
     overflow: hidden;
     background: #f8f9fa;
-    border: 2px solid #212529;
+    border: 1px solid #000;
+    border-radius: var(--bs-border-radius);
 }
 
 /* ===== Responsive ===== */

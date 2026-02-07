@@ -329,9 +329,9 @@ function createCheckElement(check) {
             </div>
             <div class="check-actions">
                 <button class="btn btn-primary btn-sm" onclick="viewCheckResults(${check.id})">Результаты</button>
-                <button class="btn btn-outline-secondary btn-sm" onclick="editCheck(${check.id})" title="Редактировать">⚙️</button>
+                <button class="btn btn-outline-dark btn-sm" onclick="editCheck(${check.id})" title="Редактировать">⚙️</button>
                 ${check.enabled
-                    ? `<button class="btn btn-outline-secondary btn-sm" onclick="toggleCheck(${check.id}, false)">Отключить</button>`
+                    ? `<button class="btn btn-outline-dark btn-sm" onclick="toggleCheck(${check.id}, false)">Отключить</button>`
                     : `<button class="btn btn-success btn-sm" onclick="toggleCheck(${check.id}, true)">Включить</button>`
                 }
                 <button class="btn btn-danger btn-sm" onclick="deleteCheck(${check.id})">Удалить</button>
@@ -714,7 +714,7 @@ async function toggleCheck(id, enabled) {
                 const toggleBtn = actionsEl.querySelector('button:nth-child(3)');
                 if (toggleBtn) {
                     if (enabled) {
-                        toggleBtn.className = 'btn btn-outline-secondary btn-sm';
+                        toggleBtn.className = 'btn btn-outline-dark btn-sm';
                         toggleBtn.textContent = 'Отключить';
                         toggleBtn.setAttribute('onclick', `toggleCheck(${id}, false)`);
                     } else {
@@ -946,30 +946,30 @@ async function loadCheckChartForCheck(checkId) {
                 {
                     label: '2xx (Успешные)',
                     data: status2xxData,
-                    borderColor: 'rgb(25, 135, 84)',
-                    backgroundColor: 'rgba(25, 135, 84, 0.1)',
-                    pointBackgroundColor: 'rgb(25, 135, 84)',
-                    pointBorderColor: 'rgb(25, 135, 84)',
+                    borderColor: 'rgb(104, 211, 145)',
+                    backgroundColor: 'rgba(104, 211, 145, 0.15)',
+                    pointBackgroundColor: 'rgb(104, 211, 145)',
+                    pointBorderColor: 'rgb(104, 211, 145)',
                     tension: 0.1,
                     yAxisID: 'y'
                 },
                 {
                     label: '4xx (Ошибки клиента)',
                     data: status4xxData,
-                    borderColor: 'rgb(255, 193, 7)',
-                    backgroundColor: 'rgba(255, 193, 7, 0.1)',
-                    pointBackgroundColor: 'rgb(255, 193, 7)',
-                    pointBorderColor: 'rgb(255, 193, 7)',
+                    borderColor: 'rgb(255, 199, 0)',
+                    backgroundColor: 'rgba(255, 199, 0, 0.15)',
+                    pointBackgroundColor: 'rgb(255, 199, 0)',
+                    pointBorderColor: 'rgb(255, 199, 0)',
                     tension: 0.1,
                     yAxisID: 'y'
                 },
                 {
                     label: '5xx (Ошибки сервера)',
                     data: status5xxData,
-                    borderColor: 'rgb(220, 53, 69)',
-                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                    pointBackgroundColor: 'rgb(220, 53, 69)',
-                    pointBorderColor: 'rgb(220, 53, 69)',
+                    borderColor: 'rgb(245, 101, 101)',
+                    backgroundColor: 'rgba(245, 101, 101, 0.15)',
+                    pointBackgroundColor: 'rgb(245, 101, 101)',
+                    pointBorderColor: 'rgb(245, 101, 101)',
                     tension: 0.1,
                     yAxisID: 'y'
                 },
@@ -986,10 +986,10 @@ async function loadCheckChartForCheck(checkId) {
                 {
                     label: 'Задержка (мс)',
                     data: latencyData,
-                    borderColor: 'rgb(13, 110, 253)',
-                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
-                    pointBackgroundColor: 'rgb(13, 110, 253)',
-                    pointBorderColor: 'rgb(13, 110, 253)',
+                    borderColor: 'rgb(34, 210, 237)',
+                    backgroundColor: 'rgba(34, 210, 237, 0.15)',
+                    pointBackgroundColor: 'rgb(34, 210, 237)',
+                    pointBorderColor: 'rgb(34, 210, 237)',
                     tension: 0.1,
                     yAxisID: 'y1'
                 }
@@ -1004,24 +1004,24 @@ async function loadCheckChartForCheck(checkId) {
                 {
                     label: 'Успешные',
                     data: successData,
-                    borderColor: 'rgb(25, 135, 84)',
-                    backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                    borderColor: 'rgb(104, 211, 145)',
+                    backgroundColor: 'rgba(104, 211, 145, 0.15)',
                     tension: 0.1,
                     yAxisID: 'y'
                 },
                 {
                     label: 'Неудачные',
                     data: failureData,
-                    borderColor: 'rgb(220, 53, 69)',
-                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    borderColor: 'rgb(245, 101, 101)',
+                    backgroundColor: 'rgba(245, 101, 101, 0.15)',
                     tension: 0.1,
                     yAxisID: 'y'
                 },
                 {
                     label: 'Задержка (мс)',
                     data: latencyData,
-                    borderColor: 'rgb(13, 110, 253)',
-                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                    borderColor: 'rgb(34, 210, 237)',
+                    backgroundColor: 'rgba(34, 210, 237, 0.15)',
                     tension: 0.1,
                     yAxisID: 'y1'
                 }
@@ -1152,7 +1152,7 @@ async function loadCheckChartForCheck(checkId) {
         const canvasId = `checkChart-${checkId}`;
         const ctx = document.getElementById(canvasId);
         if (ctx && ctx.parentElement) {
-            ctx.parentElement.innerHTML = '<p style="color: #dc3545; text-align: center; padding: 10px; font-size: 0.9em;">Ошибка загрузки данных: ' + error.message + '</p>';
+            ctx.parentElement.innerHTML = '<p style="color: #f56565; text-align: center; padding: 10px; font-size: 0.9em;">Ошибка загрузки данных: ' + error.message + '</p>';
         }
     }
 }
@@ -1226,24 +1226,24 @@ async function loadCheckChart(checkId, interval = '1m') {
                     {
                         label: 'Успешные проверки',
                         data: successData,
-                        borderColor: 'rgb(25, 135, 84)',
-                        backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                        borderColor: 'rgb(104, 211, 145)',
+                        backgroundColor: 'rgba(104, 211, 145, 0.15)',
                         tension: 0.1,
                         yAxisID: 'y'
                     },
                     {
                         label: 'Неудачные проверки',
                         data: failureData,
-                        borderColor: 'rgb(220, 53, 69)',
-                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                        borderColor: 'rgb(245, 101, 101)',
+                        backgroundColor: 'rgba(245, 101, 101, 0.15)',
                         tension: 0.1,
                         yAxisID: 'y'
                     },
                     {
                         label: 'Средняя задержка (мс)',
                         data: latencyData,
-                        borderColor: 'rgb(13, 110, 253)',
-                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        borderColor: 'rgb(34, 210, 237)',
+                        backgroundColor: 'rgba(34, 210, 237, 0.15)',
                         tension: 0.1,
                         yAxisID: 'y1'
                     }
@@ -1478,8 +1478,8 @@ function createDomainChartInstance(ctx, domainId, labels, successData, failureDa
                 {
                     label: 'Успешные',
                     data: successData,
-                    borderColor: 'rgb(25, 135, 84)',
-                    backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                    borderColor: 'rgb(104, 211, 145)',
+                    backgroundColor: 'rgba(104, 211, 145, 0.15)',
                     tension: 0.3,
                     borderWidth: 2,
                     pointRadius: 0,
@@ -1489,8 +1489,8 @@ function createDomainChartInstance(ctx, domainId, labels, successData, failureDa
                 {
                     label: 'Неудачные',
                     data: failureData,
-                    borderColor: 'rgb(220, 53, 69)',
-                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    borderColor: 'rgb(245, 101, 101)',
+                    backgroundColor: 'rgba(245, 101, 101, 0.15)',
                     tension: 0.3,
                     borderWidth: 2,
                     pointRadius: 0,
@@ -1500,8 +1500,8 @@ function createDomainChartInstance(ctx, domainId, labels, successData, failureDa
                 {
                     label: 'Задержка (мс)',
                     data: latencyData,
-                    borderColor: 'rgb(13, 110, 253)',
-                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                    borderColor: 'rgb(34, 210, 237)',
+                    backgroundColor: 'rgba(34, 210, 237, 0.15)',
                     tension: 0.3,
                     borderWidth: 2,
                     pointRadius: 0,
