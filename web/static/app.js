@@ -60,11 +60,15 @@ async function apiCall(endpoint, options = {}) {
     }
 }
 
-// Chart.js light theme defaults (Brite)
-Chart.defaults.color = '#212529';
-Chart.defaults.borderColor = '#dee2e6';
-Chart.defaults.plugins.legend.labels.color = '#495057';
-Chart.defaults.scale.grid = { ...Chart.defaults.scale.grid, color: '#dee2e6' };
+// Chart.js defaults — read colors from Bootstrap CSS variables at runtime
+const _bs = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const _bsBodyColor = _bs('--bs-body-color') || '#212529';
+const _bsBorderColor = _bs('--bs-border-color') || '#dee2e6';
+const _bsSecondaryColor = _bs('--bs-secondary-color') || '#6c757d';
+Chart.defaults.color = _bsBodyColor;
+Chart.defaults.borderColor = _bsBorderColor;
+Chart.defaults.plugins.legend.labels.color = _bsSecondaryColor;
+Chart.defaults.scale.grid = { ...Chart.defaults.scale.grid, color: _bsBorderColor };
 
 // Кэш проверок по домену (используется для обновления графиков без лишних запросов)
 const domainChecksCache = new Map();
@@ -235,7 +239,7 @@ async function loadChecksForDomain(domainId) {
         domainChecksCache.set(domainId, checks);
 
         if (checks.length === 0) {
-            checksEl.innerHTML = '<p style="color: #6c757d; text-align: center; padding: 10px;">Нет проверок</p>';
+            checksEl.innerHTML = '<p style="color: var(--bs-secondary-color); text-align: center; padding: 10px;">Нет проверок</p>';
             return;
         }
 
@@ -1108,7 +1112,7 @@ async function loadCheckChartForCheck(checkId) {
                         },
                         grid: {
                             drawOnChartArea: false,
-                            color: '#dee2e6',
+                            color: _bsBorderColor,
                         },
                         ticks: {
                             font: {
@@ -1152,7 +1156,7 @@ async function loadCheckChartForCheck(checkId) {
         const canvasId = `checkChart-${checkId}`;
         const ctx = document.getElementById(canvasId);
         if (ctx && ctx.parentElement) {
-            ctx.parentElement.innerHTML = '<p style="color: #f56565; text-align: center; padding: 10px; font-size: 0.9em;">Ошибка загрузки данных: ' + error.message + '</p>';
+            ctx.parentElement.innerHTML = '<p style="color: var(--bs-danger); text-align: center; padding: 10px; font-size: 0.9em;">Ошибка загрузки данных: ' + error.message + '</p>';
         }
     }
 }
@@ -1300,7 +1304,7 @@ async function loadCheckChart(checkId, interval = '1m') {
                         },
                         grid: {
                             drawOnChartArea: false,
-                            color: '#dee2e6',
+                            color: _bsBorderColor,
                         },
                     }
                 }
@@ -1532,18 +1536,18 @@ function createDomainChartInstance(ctx, domainId, labels, successData, failureDa
                     beginAtZero: true, min: 0,
                     title: { display: true, text: 'Количество', font: { size: 10 } },
                     ticks: { font: { size: 9 }, stepSize: 1 },
-                    grid: { color: '#dee2e6' }
+                    grid: { color: _bsBorderColor }
                 },
                 y1: {
                     type: 'linear', display: true, position: 'right',
                     beginAtZero: true, min: 0,
                     title: { display: true, text: 'Задержка (мс)', font: { size: 10 } },
-                    grid: { drawOnChartArea: false, color: '#dee2e6' },
+                    grid: { drawOnChartArea: false, color: _bsBorderColor },
                     ticks: { font: { size: 9 }, stepSize: 10 }
                 },
                 x: {
                     ticks: { font: { size: 9 } },
-                    grid: { color: '#dee2e6' }
+                    grid: { color: _bsBorderColor }
                 }
             }
         }
